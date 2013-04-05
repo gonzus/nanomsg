@@ -232,8 +232,8 @@ set (NN_DESCRIPTION "nanomsg library is a high-performance implementation of sev
 
 add_subdirectory (src)
 add_subdirectory (tests)
-add_subdirectory (perf)
-add_subdirectory (doc)
+#add_subdirectory (perf)
+#add_subdirectory (doc)
 if (ZMQ_COMPAT)
     add_subdirectory (compat/zmq)
 endif ()

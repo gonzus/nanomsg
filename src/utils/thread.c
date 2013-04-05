@@ -40,7 +40,7 @@ void nn_thread_init (struct nn_thread *self,
     self->routine = routine;
     self->arg = arg;
     self->handle = (HANDLE) _beginthreadex (NULL, 0,
-        nn_thread_main_routine, (void*) self, 0 , &self->tid);
+        nn_thread_main_routine, (void*) self, 0 , NULL);
     win_assert (self->handle != NULL);
 }
 
@@ -53,11 +53,6 @@ void nn_thread_term (struct nn_thread *self)
     win_assert (rc != WAIT_FAILED);
     brc = CloseHandle (self->handle);
     win_assert (brc != 0);
-}
-
-int nn_thread_current (struct nn_thread *self)
-{
-    return ((unsigned int) GetCurrentThreadId ()) == self->tid ? 1 : 0;
 }
 
 #else
@@ -103,11 +98,6 @@ void nn_thread_term (struct nn_thread *self)
 
     rc = pthread_join (self->handle, NULL);
     errnum_assert (rc == 0, rc);
-}
-
-int nn_thread_current (struct nn_thread *self)
-{
-    return pthread_equal (pthread_self (), self->handle) ? 1 : 0;
 }
 
 #endif

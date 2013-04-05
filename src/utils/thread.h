@@ -39,7 +39,6 @@ struct nn_thread
     void *arg;
 #ifdef NN_HAVE_WINDOWS
     HANDLE handle;
-    unsigned int tid;
 #else
     pthread_t handle;
 #endif
@@ -48,10 +47,6 @@ struct nn_thread
 void nn_thread_init (struct nn_thread *self,
     nn_thread_routine *routine, void *arg);
 void nn_thread_term (struct nn_thread *self);
-
-/*  Returns 1 if the current thread is the one managed by the nn_thread object,
-    0 otherwise. */
-int nn_thread_current (struct nn_thread *self);
 
 #endif
 

@@ -1,5 +1,5 @@
 #
-#   Copyright (c) 2012 250bpm s.r.o.
+#   Copyright (c) 2012-2013 250bpm s.r.o.
 #
 #   Permission is hereby granted, free of charge, to any person obtaining a copy
 #   of this software and associated documentation files (the "Software"),
@@ -25,76 +25,80 @@ set (CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set (CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 set (NN_SOURCES
-    nn.h
-    transport.h
-    protocol.h
-    inproc.h
-    ipc.h
-    tcp.h
-    pair.h
-    pubsub.h
-    reqrep.h
-    fanin.h
-    fanout.h
-    survey.h
-    bus.h
 
-    core/ctx.h
-    core/ctx.c
-    core/ep.h
-    core/ep.c
-    core/pipe.c
-    core/sock.h
-    core/sock.c
-    core/device.c
-    core/symbol.c
+    utils/fsm.h
+    utils/fsm.c
+    utils/worker.h
+    utils/worker.c
+    utils/usock.h
+    utils/usock.c
 
-    utils/addr.h
-    utils/addr.c
-    utils/aio.h
-    utils/aio.c
-    utils/aio_posix.inc
-    utils/aio_win.inc
-    utils/alloc.h
-    utils/alloc.c
-    utils/astream.h
-    utils/astream.c
-    utils/atomic.h
-    utils/atomic.c
-    utils/bstream.h
-    utils/bstream.c
-    utils/chunk.h
-    utils/chunk.c
-    utils/chunkref.h
-    utils/chunkref.c
-    utils/clock.h
-    utils/clock.c
-    utils/cont.h
-    utils/cstream.h
-    utils/cstream.c
-    utils/dist.h
-    utils/dist.c
+#    nn.h
+#    transport.h
+#    protocol.h
+#    inproc.h
+#    ipc.h
+#    tcp.h
+#    pair.h
+#    pubsub.h
+#    reqrep.h
+#    fanin.h
+#    fanout.h
+#    survey.h
+#    bus.h
+#
+#    core/ctx.h
+#    core/ctx.c
+#    core/ep.h
+#    core/ep.c
+#    core/pipe.c
+#    core/sock.h
+#    core/sock.c
+#    core/device.c
+#    core/symbol.c
+#
+#    utils/addr.h
+#    utils/addr.c
+#    utils/alloc.h
+#    utils/alloc.c
+#    utils/astream.h
+#    utils/astream.c
+#    utils/atomic.h
+#    utils/atomic.c
+#    utils/bstream.h
+#    utils/bstream.c
+#    utils/chunk.h
+#    utils/chunk.c
+#    utils/chunkref.h
+#    utils/chunkref.c
+#    utils/clock.h
+#    utils/clock.c
+#    utils/cont.h
+#    utils/cstream.h
+#    utils/cstream.c
+#    utils/dist.h
+#    utils/dist.c
     utils/efd.h
     utils/efd.c
-    utils/err.h
-    utils/err.c
-    utils/excl.h
-    utils/excl.c
-    utils/fast.h
-    utils/fq.h
-    utils/fq.c
-    utils/glock.h
-    utils/glock.c
-    utils/hash.h
-    utils/hash.c
-    utils/latmon.h
-    utils/latmon.c
-    utils/lb.h
-    utils/lb.c
-    utils/list.h
-    utils/list.c
-    utils/msg.h
-    utils/msg.c
+#    utils/err.h
+#    utils/err.c
+#    utils/excl.h
+#    utils/excl.c
+#    utils/fast.h
+#    utils/fq.h
+#    utils/fq.c
+#    utils/glock.h
+#    utils/glock.c
+#    utils/hash.h
+#    utils/hash.c
+#    utils/latmon.h
+#    utils/latmon.c
+#    utils/lb.h
+#    utils/lb.c
+#    utils/list.h
+#    utils/list.c
+#    utils/msg.h
+#    utils/msg.c
     utils/mutex.h
     utils/mutex.c
     utils/poller.h
@@ -102,95 +106,95 @@ set (NN_SOURCES
     utils/poller_epoll.inc
     utils/poller_kqueue.inc
     utils/poller_poll.inc
-    utils/priolist.h
-    utils/priolist.c
+#    utils/priolist.h
+#    utils/priolist.c
     utils/queue.h
     utils/queue.c
-    utils/random.h
-    utils/random.c
-    utils/sem.h
-    utils/sem.c
-    utils/sleep.h
-    utils/sleep.c
-    utils/stream.h
-    utils/stream.c
-    utils/thread.h
-    utils/thread.c
-    utils/timeout.h
-    utils/timeout.c
-    utils/wire.h
-    utils/wire.c
-
-    protocols/bus/bus.h
-    protocols/bus/bus.c
-    protocols/bus/xbus.h
-    protocols/bus/xbus.c
-
-    protocols/fanin/sink.h
-    protocols/fanin/sink.c
-    protocols/fanin/source.h
-    protocols/fanin/source.c
-    protocols/fanin/xsink.h
-    protocols/fanin/xsink.c
-    protocols/fanin/xsource.h
-    protocols/fanin/xsource.c
-
-    protocols/fanout/push.h
-    protocols/fanout/push.c
-    protocols/fanout/pull.h
-    protocols/fanout/pull.c
-    protocols/fanout/xpull.h
-    protocols/fanout/xpull.c
-    protocols/fanout/xpush.h
-    protocols/fanout/xpush.c
-
-    protocols/pair/pair.h
-    protocols/pair/pair.c
-    protocols/pair/xpair.h
-    protocols/pair/xpair.c
-
-    protocols/pubsub/pub.h
-    protocols/pubsub/pub.c
-    protocols/pubsub/sub.h
-    protocols/pubsub/sub.c
-    protocols/pubsub/trie.h
-    protocols/pubsub/trie.c
-
-    protocols/reqrep/req.h
-    protocols/reqrep/req.c
-    protocols/reqrep/rep.h
-    protocols/reqrep/rep.c
-    protocols/reqrep/xrep.h
-    protocols/reqrep/xrep.c
-    protocols/reqrep/xreq.h
-    protocols/reqrep/xreq.c
-
-    protocols/survey/respondent.h
-    protocols/survey/respondent.c
-    protocols/survey/surveyor.h
-    protocols/survey/surveyor.c
-    protocols/survey/xrespondent.h
-    protocols/survey/xrespondent.c
-    protocols/survey/xsurveyor.h
-    protocols/survey/xsurveyor.c
-
-    transports/inproc/inproc.h
-    transports/inproc/inproc_ctx.h
-    transports/inproc/inproc_ctx.c
-    transports/inproc/inprocb.h
-    transports/inproc/inprocb.c
-    transports/inproc/inprocc.h
-    transports/inproc/inprocc.c
-    transports/inproc/msgpipe.h
-    transports/inproc/msgpipe.c
-    transports/inproc/msgqueue.h
-    transports/inproc/msgqueue.c
-
-    transports/ipc/ipc.h
-    transports/ipc/ipc.c
-
-    transports/tcp/tcp.h
-    transports/tcp/tcp.c
+#    utils/random.h
+#    utils/random.c
+#    utils/sem.h
+#    utils/sem.c
+#    utils/sleep.h
+#    utils/sleep.c
+#    utils/stream.h
+#    utils/stream.c
+#    utils/thread.h
+#    utils/thread.c
+#    utils/timeout.h
+#    utils/timeout.c
+#    utils/wire.h
+#    utils/wire.c
+#
+#    protocols/bus/bus.h
+#    protocols/bus/bus.c
+#    protocols/bus/xbus.h
+#    protocols/bus/xbus.c
+#
+#    protocols/fanin/sink.h
+#    protocols/fanin/sink.c
+#    protocols/fanin/source.h
+#    protocols/fanin/source.c
+#    protocols/fanin/xsink.h
+#    protocols/fanin/xsink.c
+#    protocols/fanin/xsource.h
+#    protocols/fanin/xsource.c
+#
+#    protocols/fanout/push.h
+#    protocols/fanout/push.c
+#    protocols/fanout/pull.h
+#    protocols/fanout/pull.c
+#    protocols/fanout/xpull.h
+#    protocols/fanout/xpull.c
+#    protocols/fanout/xpush.h
+#    protocols/fanout/xpush.c
+#
+#    protocols/pair/pair.h
+#    protocols/pair/pair.c
+#    protocols/pair/xpair.h
+#    protocols/pair/xpair.c
+#
+#    protocols/pubsub/pub.h
+#    protocols/pubsub/pub.c
+#    protocols/pubsub/sub.h
+#    protocols/pubsub/sub.c
+#    protocols/pubsub/trie.h
+#    protocols/pubsub/trie.c
+#
+#    protocols/reqrep/req.h
+#    protocols/reqrep/req.c
+#    protocols/reqrep/rep.h
+#    protocols/reqrep/rep.c
+#    protocols/reqrep/xrep.h
+#    protocols/reqrep/xrep.c
+#    protocols/reqrep/xreq.h
+#    protocols/reqrep/xreq.c
+#
+#    protocols/survey/respondent.h
+#    protocols/survey/respondent.c
+#    protocols/survey/surveyor.h
+#    protocols/survey/surveyor.c
+#    protocols/survey/xrespondent.h
+#    protocols/survey/xrespondent.c
+#    protocols/survey/xsurveyor.h
+#    protocols/survey/xsurveyor.c
+#
+#    transports/inproc/inproc.h
+#    transports/inproc/inproc_ctx.h
+#    transports/inproc/inproc_ctx.c
+#    transports/inproc/inprocb.h
+#    transports/inproc/inprocb.c
+#    transports/inproc/inprocc.h
+#    transports/inproc/inprocc.c
+#    transports/inproc/msgpipe.h
+#    transports/inproc/msgpipe.c
+#    transports/inproc/msgqueue.h
+#    transports/inproc/msgqueue.c
+#
+#    transports/ipc/ipc.h
+#    transports/ipc/ipc.c
+#
+#    transports/tcp/tcp.h
+#    transports/tcp/tcp.c
 )
 
 #  Here we cause symbols not to be exported from the library unless
