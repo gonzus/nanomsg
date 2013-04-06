@@ -32,61 +32,42 @@
 #define NN_USOCK_STATE_CONNECTED 3
 #define NN_USOCK_STATE_ACCEPTING 4
 
-#define NN_USOCK_EVENT_CONNECTED 1
-#define NN_USOCK_EVENT_CONNECT 2
-#define NN_USOCK_EVENT_ACCEPT 3
-#define NN_USOCK_EVENT_IN 4
-#define NN_USOCK_EVENT_OUT 5
-#define NN_USOCK_EVENT_ERR 6
+#define NN_USOCK_EVENT_IN NN_WORKER_EVENT_IN
+#define NN_USOCK_EVENT_OUT NN_WORKER_EVENT_OUT
+#define NN_USOCK_EVENT_ERR NN_WORKER_EVENT_ERR
+#define NN_USOCK_EVENT_CONNECTED 100
+#define NN_USOCK_EVENT_CONNECT 101
+#define NN_USOCK_EVENT_ACCEPT 102
 
-/*  Function implementing the usock state machine. */
 static void nn_usock_process (struct nn_usock *self, int event);
+static void nn_usock_event_handler (const struct nn_worker_vfptr **self,
+    int event, void *source)
+{
+    struct nn_usock *usock;
 
-/*  Following functions are used to convert worker events into usock state
-    machine events. */
-static void nn_usock_init_connected (struct nn_worker_event *self)
-{
-    nn_usock_process (nn_cont (self, struct nn_usock, init),
-        NN_USOCK_EVENT_CONNECTED);
-}
-static const struct nn_worker_event_vfptr nn_usock_init_connected_vfptr =
-    {nn_usock_init_connected};
-static void nn_usock_init_connect (struct nn_worker_event *self)
-{
-    nn_usock_process (nn_cont (self, struct nn_usock, init),
-        NN_USOCK_EVENT_CONNECT);
-}
-static const struct nn_worker_event_vfptr nn_usock_init_connect_vfptr =
-    {nn_usock_init_connect};
-static void nn_usock_init_accept (struct nn_worker_event *self)
-{
-    nn_usock_process (nn_cont (self, struct nn_usock, init),
-        NN_USOCK_EVENT_ACCEPT);
-}
-static const struct nn_worker_event_vfptr nn_usock_init_accept_vfptr =
-    {nn_usock_init_accept};
+    usock = nn_cont (self, struct nn_usock, vfptr);
 
-/*  Convert the events from the poller to usock's state machine events. */
-static void nn_usock_poll_event (struct nn_worker_hndl *self, int event)
-{
-    int ev;
-
-    switch (event) {
-    case NN_WORKER_HNDL_IN:
-        ev = NN_USOCK_EVENT_IN;
-        break;
-    case NN_WORKER_HNDL_OUT:
-        ev = NN_USOCK_EVENT_OUT;
-        break;
-    case NN_WORKER_HNDL_ERR:
-        ev = NN_USOCK_EVENT_ERR;
-        break;
-    default:
-        nn_assert (0);
+    /*  This function coverts async events into native usock events. */
+    if (source == &usock->wfd) {
+        nn_usock_process (usock, event);
+        return;
     }
-    nn_usock_process (nn_cont (self, struct nn_usock, hndl), ev);
-} 
-const struct nn_worker_hndl_vfptr nn_usock_poll_vfptr = {nn_usock_poll_event};
+    nn_assert (event == NN_WORKER_EVENT_POSTED);
+    if (source == &usock->connected_task) {
+        nn_usock_process (usock, NN_USOCK_EVENT_CONNECTED);
+        return;
+    }
+    if (source == &usock->connect_task) {
+        nn_usock_process (usock, NN_USOCK_EVENT_CONNECT);
+        return;
+    }
+    if (source == &usock->accept_task) {
+        nn_usock_process (usock, NN_USOCK_EVENT_ACCEPT);
+        return;
+    }
+    nn_assert (0);
+}
+static const struct nn_worker_vfptr nn_usock_vfptr = {nn_usock_event_handler};
 
 #if 0
 void nn_usock_event_init (struct nn_usock_event *self,
@@ -109,12 +90,13 @@ static int nn_usock_init_from_fd (struct nn_usock *self,
     int rc;
     int opt;
 
+    self->vfptr = &nn_usock_vfptr;
+
     /*  Store the reference to the worker the socket is associated with. */
     self->worker = worker;
 
     /*  Store the file descriptor of the underlying socket. */
     self->s = fd;
-    nn_worker_hndl_init (&self->hndl, &nn_usock_poll_vfptr);
 
     /* Setting FD_CLOEXEC option immediately after socket creation is the
         second best option after using SOCK_CLOEXEC. There is a race condition
@@ -155,10 +137,14 @@ static int nn_usock_init_from_fd (struct nn_usock *self,
 #endif
     }
 
+    nn_worker_fd_init (&self->wfd, &self->vfptr);
+
     self->state = NN_USOCK_STATE_STARTING;
 
     /*  Initialise the events to be sent to the worker thread. */
-    nn_worker_event_init (&self->init, NULL);
+    nn_worker_task_init (&self->connect_task, &self->vfptr);
+    nn_worker_task_init (&self->connected_task, &self->vfptr);
+    nn_worker_task_init (&self->accept_task, &self->vfptr);
 
     /*  We are not accepting a connection at the moment. */
     self->newsock = NULL;
@@ -268,9 +254,7 @@ void nn_usock_accept (struct nn_usock *self, struct nn_usock *newsock,
 
     /*  Ask the worker thread to wait for the new connection. */
     self->newsock = newsock;
-    nn_worker_event_term (&self->init);
-    nn_worker_event_init (&self->init, &nn_usock_init_accept_vfptr);
-    nn_worker_post (self->worker, &self->init);    
+    nn_worker_post (self->worker, &self->accept_task);    
 }
 
 void nn_usock_connect (struct nn_usock *self, const struct sockaddr *addr,
@@ -285,9 +269,7 @@ void nn_usock_connect (struct nn_usock *self, const struct sockaddr *addr,
     if (nn_fast (rc == 0)) {
 
         /*  Ask worker thread to start polling on the socket. */
-        nn_worker_event_term (&self->init);
-        nn_worker_event_init (&self->init, &nn_usock_init_connected_vfptr);
-        nn_worker_post (self->worker, &self->init);
+        nn_worker_post (self->worker, &self->connected_task);
 
         /*  Notify the user that the connection is established. */
         event->vfptr->event (event);
@@ -303,9 +285,7 @@ void nn_usock_connect (struct nn_usock *self, const struct sockaddr *addr,
     }
 
     /*  Ask worker thread to start waiting for connection establishment. */
-    nn_worker_event_term (&self->init);
-    nn_worker_event_init (&self->init, &nn_usock_init_connect_vfptr);
-    nn_worker_post (self->worker, &self->init);
+    nn_worker_post (self->worker, &self->connect_task);
 }
 
 void nn_usock_send (struct nn_usock *self, const struct nn_iobuf *iov,
@@ -326,17 +306,17 @@ static void nn_usock_process (struct nn_usock *self, int event)
     case NN_USOCK_STATE_STARTING:
         switch (event) {
         case NN_USOCK_EVENT_CONNECTED:
-            nn_worker_add (self->worker, self->s, &self->hndl);
+            nn_worker_add (self->worker, self->s, &self->wfd);
             self->state = NN_USOCK_STATE_CONNECTED;
             break;
         case NN_USOCK_EVENT_CONNECT:
-            nn_worker_add (self->worker, self->s, &self->hndl);
-            nn_worker_set_out (self->worker, &self->hndl);
+            nn_worker_add (self->worker, self->s, &self->wfd);
+            nn_worker_set_out (self->worker, &self->wfd);
             self->state = NN_USOCK_STATE_CONNECTING;
             break;
         case NN_USOCK_EVENT_ACCEPT:
-            nn_worker_add (self->worker, self->s, &self->hndl);
-            nn_worker_set_in (self->worker, &self->hndl);
+            nn_worker_add (self->worker, self->s, &self->wfd);
+            nn_worker_set_in (self->worker, &self->wfd);
             self->state = NN_USOCK_STATE_ACCEPTING;
             break;
         default:
@@ -346,7 +326,7 @@ static void nn_usock_process (struct nn_usock *self, int event)
     case NN_USOCK_STATE_CONNECTING:
         switch (event) {
         case NN_USOCK_EVENT_OUT:
-            nn_worker_reset_out (self->worker, &self->hndl);
+            nn_worker_reset_out (self->worker, &self->wfd);
             self->state = NN_USOCK_STATE_CONNECTED;
             break;
         case NN_USOCK_EVENT_ERR:

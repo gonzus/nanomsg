@@ -45,7 +45,7 @@ struct nn_usock_event_vfptr {
 
 struct nn_usock_event {
     const struct nn_usock_event_vfptr *vfptr;
-    struct nn_worker_event worker_event;
+    struct nn_worker_task task;
     int error;
 };
 
@@ -55,23 +55,24 @@ void nn_usock_event_term (struct nn_usock_event *self);
 
 struct nn_usock {
 
+    /*  Handles events from the worker thread. */
+    const struct nn_worker_vfptr *vfptr;
+
     /*  The worker thread the usock is associated with. */
     struct nn_worker *worker;
 
     /*  The underlying OS socket and handle that represents it in the poller. */
     int s;
-    struct nn_worker_hndl hndl;
+    struct nn_worker_fd wfd;
 
     /*  The state the usock's state machine is in. This value is accessed
         solely from the worker thread. */
     int state;
 
-    /*  This event is used to signal that the connection is established, that
-        we are waiting for a connection to be established or that a new
-        connection can be accepted. We could have used three separate events,
-        but given that the three modes are mutually exclusive, we can do with
-        a single one. */
-    struct nn_worker_event init;
+    /*  Asynchronous tasks. */
+    struct nn_worker_task connect_task;
+    struct nn_worker_task connected_task;
+    struct nn_worker_task accept_task;
 
     /*  When accepting a new connection, the pointer to the object to associate
         the new connection with is stored here. */

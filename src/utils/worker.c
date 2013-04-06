@@ -25,36 +25,36 @@
 #include "fast.h"
 #include "cont.h"
 
-/*  Private functions. */
-static void nn_worker_routine (void *arg);
-
-void nn_worker_hndl_init (struct nn_worker_hndl *self,
-    const struct nn_worker_hndl_vfptr *vfptr)
+void nn_worker_fd_init (struct nn_worker_fd *self,
+    const struct nn_worker_vfptr **owner)
 {
-    self->vfptr = vfptr;
+    self->owner = owner;
 }
 
-void nn_worker_hndl_term (struct nn_worker_hndl *self)
+void nn_worker_fd_term (struct nn_worker_fd *self)
 {
 }
 
-void nn_worker_event_init (struct nn_worker_event *self,
-    const struct nn_worker_event_vfptr *vfptr)
+void nn_worker_task_init (struct nn_worker_task *self,
+    const struct nn_worker_vfptr **owner)
 {
-    self->vfptr = vfptr;
+    self->owner = owner;
     nn_queue_item_init (&self->item);
 }
 
-void nn_worker_event_term (struct nn_worker_event *self)
+void nn_worker_task_term (struct nn_worker_task *self)
 {
     nn_queue_item_term (&self->item);
 }
+
+/*  Private functions. */
+static void nn_worker_routine (void *arg);
 
 void nn_worker_init (struct nn_worker *self)
 {
     nn_mutex_init (&self->sync);
     nn_queue_init (&self->events);
-    nn_worker_event_init (&self->stop, NULL);
+    nn_queue_item_init (&self->stop);
     nn_efd_init (&self->efd);
     nn_poller_init (&self->poller);
     nn_poller_add (&self->poller, nn_efd_getfd (&self->efd), &self->efd_hndl);
@@ -65,7 +65,10 @@ void nn_worker_init (struct nn_worker *self)
 void nn_worker_term (struct nn_worker *self)
 {
     /*  Ask worker thread to terminate. */
-    nn_worker_post (self, &self->stop);
+    nn_mutex_lock (&self->sync);
+    nn_queue_push (&self->events, &self->stop);
+    nn_efd_signal (&self->efd);
+    nn_mutex_unlock (&self->sync);
 
     /*  Wait till worker thread terminates. */
     nn_thread_term (&self->thread);
@@ -73,47 +76,47 @@ void nn_worker_term (struct nn_worker *self)
     /*  Clean up. */
     nn_poller_term (&self->poller);
     nn_efd_term (&self->efd);
-    nn_worker_event_term (&self->stop);
+    nn_queue_item_term (&self->stop);
     nn_queue_term (&self->events);
     nn_mutex_term (&self->sync);
 }
 
-void nn_worker_post (struct nn_worker *self, struct nn_worker_event *event)
+void nn_worker_post (struct nn_worker *self, struct nn_worker_task *task)
 {
     nn_mutex_lock (&self->sync);
-    nn_queue_push (&self->events, &event->item);
+    nn_queue_push (&self->events, &task->item);
     nn_efd_signal (&self->efd);
     nn_mutex_unlock (&self->sync);
 }
 
-void nn_worker_add (struct nn_worker *self, int fd, struct nn_worker_hndl *hndl)
+void nn_worker_add (struct nn_worker *self, int s, struct nn_worker_fd *fd)
 {
-    nn_poller_add (&self->poller, fd, &hndl->phndl);
+    nn_poller_add (&self->poller, s, &fd->phndl);
 }
 
-void nn_worker_rm (struct nn_worker *self, struct nn_worker_hndl *hndl)
+void nn_worker_rm (struct nn_worker *self, struct nn_worker_fd *fd)
 {
-    nn_poller_rm (&self->poller, &hndl->phndl);
+    nn_poller_rm (&self->poller, &fd->phndl);
 }
 
-void nn_worker_set_in (struct nn_worker *self, struct nn_worker_hndl *hndl)
+void nn_worker_set_in (struct nn_worker *self, struct nn_worker_fd *fd)
 {
-    nn_poller_set_in (&self->poller, &hndl->phndl);
+    nn_poller_set_in (&self->poller, &fd->phndl);
 }
 
-void nn_worker_reset_in (struct nn_worker *self, struct nn_worker_hndl *hndl)
+void nn_worker_reset_in (struct nn_worker *self, struct nn_worker_fd *fd)
 {
-    nn_poller_reset_in (&self->poller, &hndl->phndl);
+    nn_poller_reset_in (&self->poller, &fd->phndl);
 }
 
-void nn_worker_set_out (struct nn_worker *self, struct nn_worker_hndl *hndl)
+void nn_worker_set_out (struct nn_worker *self, struct nn_worker_fd *fd)
 {
-    nn_poller_set_out (&self->poller, &hndl->phndl);
+    nn_poller_set_out (&self->poller, &fd->phndl);
 }
 
-void nn_worker_reset_out (struct nn_worker *self, struct nn_worker_hndl *hndl)
+void nn_worker_reset_out (struct nn_worker *self, struct nn_worker_fd *fd)
 {
-    nn_poller_reset_out (&self->poller, &hndl->phndl);
+    nn_poller_reset_out (&self->poller, &fd->phndl);
 }
 
 static void nn_worker_routine (void *arg)
@@ -123,8 +126,8 @@ static void nn_worker_routine (void *arg)
     int pevent;
     struct nn_poller_hndl *phndl;
     struct nn_queue_item *item;
-    struct nn_worker_event *worker_event;
-    struct nn_worker_hndl *chndl;
+    struct nn_worker_task *task;
+    struct nn_worker_fd *fd;
 
     self = (struct nn_worker*) arg;
 
@@ -155,25 +158,26 @@ static void nn_worker_routine (void *arg)
                     item = nn_queue_pop (&self->events);
                     if (nn_slow (!item))
                         break;
-                    worker_event = nn_cont (item, struct nn_worker_event, item);
 
                     /*  If the worker thread is asked to stop, do so. */
-                    if (nn_slow (worker_event == &self->stop)) {
+                    if (nn_slow (item == &self->stop)) {
                         nn_mutex_unlock (&self->sync);
                         return;
                     }
 
                     /*  It's a standard event. Notify it that it has arrived
                         in the worker thread. */
-                    worker_event->vfptr->start (worker_event);
+                    task = nn_cont (item, struct nn_worker_task, item);
+                    (*task->owner)->event (task->owner,
+                        NN_WORKER_EVENT_POSTED, task);
                 }
                 nn_mutex_unlock (&self->sync);
                 continue;
             }
 
             /*  It's a true I/O event. Invoke the handler. */
-            chndl = nn_cont (phndl, struct nn_worker_hndl, phndl);
-            chndl->vfptr->event (chndl, pevent);
+            fd = nn_cont (phndl, struct nn_worker_fd, phndl);
+            (*fd->owner)->event (fd->owner, pevent, fd);
         }
     }
 }
