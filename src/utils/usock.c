@@ -32,27 +32,27 @@
 #define NN_USOCK_STATE_CONNECTED 3
 #define NN_USOCK_STATE_ACCEPTING 4
 
-#define NN_USOCK_EVENT_IN NN_WORKER_EVENT_IN
-#define NN_USOCK_EVENT_OUT NN_WORKER_EVENT_OUT
-#define NN_USOCK_EVENT_ERR NN_WORKER_EVENT_ERR
+#define NN_USOCK_EVENT_IN NN_ASYNC_IN
+#define NN_USOCK_EVENT_OUT NN_ASYNC_OUT
+#define NN_USOCK_EVENT_ERR NN_ASYNC_ERR
 #define NN_USOCK_EVENT_CONNECTED 100
 #define NN_USOCK_EVENT_CONNECT 101
 #define NN_USOCK_EVENT_ACCEPT 102
 
 static void nn_usock_process (struct nn_usock *self, int event);
-static void nn_usock_event_handler (const struct nn_worker_vfptr **self,
-    int event, void *source)
+static void nn_usock_event_handler (struct nn_async *self, void *source,
+    int type)
 {
     struct nn_usock *usock;
 
-    usock = nn_cont (self, struct nn_usock, vfptr);
+    usock = nn_cont (self, struct nn_usock, async);
 
     /*  This function coverts async events into native usock events. */
     if (source == &usock->wfd) {
-        nn_usock_process (usock, event);
+        nn_usock_process (usock, type);
         return;
     }
-    nn_assert (event == NN_WORKER_EVENT_POSTED);
+    nn_assert (type == NN_ASYNC_OK);
     if (source == &usock->connected_task) {
         nn_usock_process (usock, NN_USOCK_EVENT_CONNECTED);
         return;
@@ -67,7 +67,7 @@ static void nn_usock_event_handler (const struct nn_worker_vfptr **self,
     }
     nn_assert (0);
 }
-static const struct nn_worker_vfptr nn_usock_vfptr = {nn_usock_event_handler};
+static const struct nn_async_vfptr nn_usock_vfptr = {nn_usock_event_handler};
 
 #if 0
 void nn_usock_event_init (struct nn_usock_event *self,
@@ -90,7 +90,7 @@ static int nn_usock_init_from_fd (struct nn_usock *self,
     int rc;
     int opt;
 
-    self->vfptr = &nn_usock_vfptr;
+    nn_async_init (&self->async, &nn_usock_vfptr);
 
     /*  Store the reference to the worker the socket is associated with. */
     self->worker = worker;
@@ -137,14 +137,14 @@ static int nn_usock_init_from_fd (struct nn_usock *self,
 #endif
     }
 
-    nn_worker_fd_init (&self->wfd, &self->vfptr);
+    nn_worker_fd_init (&self->wfd, &self->async);
 
     self->state = NN_USOCK_STATE_STARTING;
 
     /*  Initialise the events to be sent to the worker thread. */
-    nn_worker_task_init (&self->connect_task, &self->vfptr);
-    nn_worker_task_init (&self->connected_task, &self->vfptr);
-    nn_worker_task_init (&self->accept_task, &self->vfptr);
+    nn_worker_task_init (&self->connect_task, &self->async);
+    nn_worker_task_init (&self->connected_task, &self->async);
+    nn_worker_task_init (&self->accept_task, &self->async);
 
     /*  We are not accepting a connection at the moment. */
     self->newsock = NULL;

@@ -23,6 +23,7 @@
 #ifndef NN_USOCK_INCLUDED
 #define NN_USOCK_INCLUDED
 
+#include "async.h"
 #include "worker.h"
 
 #define _GNU_SOURCE
@@ -55,8 +56,8 @@ void nn_usock_event_term (struct nn_usock_event *self);
 
 struct nn_usock {
 
-    /*  Handles events from the worker thread. */
-    const struct nn_worker_vfptr *vfptr;
+    /*  Base class. */
+    struct nn_async async;
 
     /*  The worker thread the usock is associated with. */
     struct nn_worker *worker;

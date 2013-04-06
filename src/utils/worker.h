@@ -28,35 +28,22 @@
 #include "thread.h"
 #include "efd.h"
 #include "poller.h"
-
-#define NN_WORKER_EVENT_IN NN_POLLER_IN
-#define NN_WORKER_EVENT_OUT NN_POLLER_OUT
-#define NN_WORKER_EVENT_ERR NN_POLLER_ERR
-#define NN_WORKER_EVENT_POSTED 100
-
-/*  Interface to be implemented by object using the worker. It will be used
-    by the worker to report asynchronous events back to the object. */
-struct nn_worker_vfptr {
-    void (*event) (const struct nn_worker_vfptr **self, int event,
-        void *source);
-};
+#include "async.h"
 
 struct nn_worker_fd {
-    const struct nn_worker_vfptr **owner;
+    struct nn_async *owner;
     struct nn_poller_hndl phndl;
 };
 
-void nn_worker_fd_init (struct nn_worker_fd *self,
-    const struct nn_worker_vfptr **owner);
+void nn_worker_fd_init (struct nn_worker_fd *self, struct nn_async *owner);
 void nn_worker_fd_term (struct nn_worker_fd *self);
 
 struct nn_worker_task {
-    const struct nn_worker_vfptr **owner;
+    struct nn_async *owner;
     struct nn_queue_item item;
 };
 
-void nn_worker_task_init (struct nn_worker_task *self,
-    const struct nn_worker_vfptr **owner);
+void nn_worker_task_init (struct nn_worker_task *self, struct nn_async *owner);
 void nn_worker_task_term (struct nn_worker_task *self);
 
 struct nn_worker {

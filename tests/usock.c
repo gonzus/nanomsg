@@ -21,6 +21,7 @@
 */
 
 #include "../src/utils/worker.c"
+#include "../src/utils/async.c"
 #include "../src/utils/usock.c"
 #include "../src/utils/sleep.c"
 #include "../src/utils/thread.c"

@@ -25,8 +25,7 @@
 #include "fast.h"
 #include "cont.h"
 
-void nn_worker_fd_init (struct nn_worker_fd *self,
-    const struct nn_worker_vfptr **owner)
+void nn_worker_fd_init (struct nn_worker_fd *self, struct nn_async *owner)
 {
     self->owner = owner;
 }
@@ -35,8 +34,7 @@ void nn_worker_fd_term (struct nn_worker_fd *self)
 {
 }
 
-void nn_worker_task_init (struct nn_worker_task *self,
-    const struct nn_worker_vfptr **owner)
+void nn_worker_task_init (struct nn_worker_task *self, struct nn_async *owner)
 {
     self->owner = owner;
     nn_queue_item_init (&self->item);
@@ -168,8 +166,8 @@ static void nn_worker_routine (void *arg)
                     /*  It's a standard event. Notify it that it has arrived
                         in the worker thread. */
                     task = nn_cont (item, struct nn_worker_task, item);
-                    (*task->owner)->event (task->owner,
-                        NN_WORKER_EVENT_POSTED, task);
+                    task->owner->vfptr->event (task->owner,
+                        task, NN_ASYNC_OK);
                 }
                 nn_mutex_unlock (&self->sync);
                 continue;
@@ -177,7 +175,7 @@ static void nn_worker_routine (void *arg)
 
             /*  It's a true I/O event. Invoke the handler. */
             fd = nn_cont (phndl, struct nn_worker_fd, phndl);
-            (*fd->owner)->event (fd->owner, pevent, fd);
+            fd->owner->vfptr->event (fd->owner, fd, pevent);
         }
     }
 }
