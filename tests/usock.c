@@ -29,6 +29,9 @@
 #include "../src/utils/mutex.c"
 #include "../src/utils/efd.c"
 #include "../src/utils/poller.c"
+#include "../src/utils/timeout.c"
+#include "../src/utils/clock.c"
+#include "../src/utils/list.c"
 #include "../src/utils/err.c"
 
 #include <sys/types.h>

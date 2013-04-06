@@ -37,12 +37,11 @@ void nn_timeout_term (struct nn_timeout *self)
     nn_clock_term (&self->clock);
 }
 
-int nn_timeout_add (struct nn_timeout *self, int timeout,
+void nn_timeout_add (struct nn_timeout *self, int timeout,
     struct nn_timeout_hndl *hndl)
 {
     struct nn_list_item *it;
     struct nn_timeout_hndl *ith;
-    int first;
 
     /*  Compute the instant when the timeout will be due. */
     hndl->timeout = nn_clock_now (&self->clock) + timeout;
@@ -55,27 +54,12 @@ int nn_timeout_add (struct nn_timeout *self, int timeout,
         if (hndl->timeout < ith->timeout)
             break;
     }
-
-    /*  If the new timeout happens to be the first one to expire, let the user
-        know that the current waiting interval has to be changed. */
-    first = nn_list_begin (&self->timeouts) == it ? 1 : 0;
     nn_list_insert (&self->timeouts, &hndl->list, it);
-    return first;
 }
 
-int nn_timeout_rm (struct nn_timeout *self, struct nn_timeout_hndl *hndl)
+void nn_timeout_rm (struct nn_timeout *self, struct nn_timeout_hndl *hndl)
 {
-    int first;
-
-    /*  Ignore if handle is not in the timeouts list. */
-    if (!nn_list_item_isinlist (&hndl->list))
-        return 0;
-
-    /*  If it was the first timeout that was removed, the actual waiting time
-        may have changed. We'll thus return 1 to let the user know. */
-    first = nn_list_begin (&self->timeouts) == &hndl->list ? 1 : 0;
     nn_list_erase (&self->timeouts, &hndl->list);
-    return first;
 }
 
 int nn_timeout_timeout (struct nn_timeout *self)

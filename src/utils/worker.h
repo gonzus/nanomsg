@@ -28,6 +28,7 @@
 #include "thread.h"
 #include "efd.h"
 #include "poller.h"
+#include "timeout.h"
 #include "async.h"
 
 struct nn_worker_fd {
@@ -46,6 +47,15 @@ struct nn_worker_task {
 void nn_worker_task_init (struct nn_worker_task *self, struct nn_async *owner);
 void nn_worker_task_term (struct nn_worker_task *self);
 
+struct nn_worker_timer {
+    struct nn_async *owner;
+    struct nn_timeout_hndl hndl;
+};
+
+void nn_worker_timer_init (struct nn_worker_timer *self,
+    struct nn_async *owner);
+void nn_worker_timer_term (struct nn_worker_timer *self);
+
 struct nn_worker {
     struct nn_mutex sync;
     struct nn_queue events;
@@ -53,6 +63,7 @@ struct nn_worker {
     struct nn_efd efd;
     struct nn_poller poller;
     struct nn_poller_hndl efd_hndl;
+    struct nn_timeout timeout;
     struct nn_thread thread;
 };
 
@@ -61,12 +72,18 @@ void nn_worker_term (struct nn_worker *self);
 
 void nn_worker_post (struct nn_worker *self, struct nn_worker_task *task);
 
+/*  Following functions should be used only from within the event handlers! */
+
 void nn_worker_add (struct nn_worker *self, int s, struct nn_worker_fd *fd);
 void nn_worker_rm (struct nn_worker *self, struct nn_worker_fd *fd);
 void nn_worker_set_in (struct nn_worker *self, struct nn_worker_fd *fd);
 void nn_worker_reset_in (struct nn_worker *self, struct nn_worker_fd *fd);
 void nn_worker_set_out (struct nn_worker *self, struct nn_worker_fd *fd);
 void nn_worker_reset_out (struct nn_worker *self, struct nn_worker_fd *fd);
+
+int nn_worker_add_timer (struct nn_worker *self,  int timeout,
+    struct nn_worker_timer *timer);
+int nn_worker_rm_timer (struct nn_worker *self, struct nn_worker_timer *timer);
 
 #endif
 
