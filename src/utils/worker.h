@@ -28,7 +28,7 @@
 #include "thread.h"
 #include "efd.h"
 #include "poller.h"
-#include "timeout.h"
+#include "timerset.h"
 #include "async.h"
 
 struct nn_worker_fd {
@@ -49,7 +49,7 @@ void nn_worker_task_term (struct nn_worker_task *self);
 
 struct nn_worker_timer {
     struct nn_async *owner;
-    struct nn_timeout_hndl hndl;
+    struct nn_timerset_hndl hndl;
 };
 
 void nn_worker_timer_init (struct nn_worker_timer *self,
@@ -63,7 +63,7 @@ struct nn_worker {
     struct nn_efd efd;
     struct nn_poller poller;
     struct nn_poller_hndl efd_hndl;
-    struct nn_timeout timeout;
+    struct nn_timerset timerset;
     struct nn_thread thread;
 };
 

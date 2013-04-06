@@ -73,9 +73,9 @@ set (NN_SOURCES
 #    utils/chunk.c
 #    utils/chunkref.h
 #    utils/chunkref.c
-#    utils/clock.h
-#    utils/clock.c
-#    utils/cont.h
+    utils/clock.h
+    utils/clock.c
+    utils/cont.h
 #    utils/cstream.h
 #    utils/cstream.c
 #    utils/dist.h
@@ -97,8 +97,8 @@ set (NN_SOURCES
 #    utils/latmon.c
 #    utils/lb.h
 #    utils/lb.c
-#    utils/list.h
-#    utils/list.c
+    utils/list.h
+    utils/list.c
 #    utils/msg.h
 #    utils/msg.c
     utils/mutex.h
@@ -120,10 +120,10 @@ set (NN_SOURCES
 #    utils/sleep.c
 #    utils/stream.h
 #    utils/stream.c
-#    utils/thread.h
-#    utils/thread.c
-#    utils/timeout.h
-#    utils/timeout.c
+    utils/thread.h
+    utils/thread.c
+    utils/timerset.h
+    utils/timerset.c
 #    utils/wire.h
 #    utils/wire.c
 #

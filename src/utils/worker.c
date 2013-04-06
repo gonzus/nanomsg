@@ -49,12 +49,12 @@ void nn_worker_timer_init (struct nn_worker_timer *self,
     struct nn_async *owner)
 {
     self->owner = owner;
-    nn_timeout_hndl_init (&self->hndl);
+    nn_timerset_hndl_init (&self->hndl);
 }
 
 void nn_worker_timer_term (struct nn_worker_timer *self)
 {
-    nn_timeout_hndl_term (&self->hndl);
+    nn_timerset_hndl_term (&self->hndl);
 }
 
 /*  Private functions. */
@@ -69,7 +69,7 @@ void nn_worker_init (struct nn_worker *self)
     nn_poller_init (&self->poller);
     nn_poller_add (&self->poller, nn_efd_getfd (&self->efd), &self->efd_hndl);
     nn_poller_set_in (&self->poller, &self->efd_hndl);
-    nn_timeout_init (&self->timeout);
+    nn_timerset_init (&self->timerset);
     nn_thread_init (&self->thread, nn_worker_routine, self);
 }
 
@@ -85,7 +85,7 @@ void nn_worker_term (struct nn_worker *self)
     nn_thread_term (&self->thread);
 
     /*  Clean up. */
-    nn_timeout_term (&self->timeout);
+    nn_timerset_term (&self->timerset);
     nn_poller_term (&self->poller);
     nn_efd_term (&self->efd);
     nn_queue_item_term (&self->stop);
@@ -134,12 +134,12 @@ void nn_worker_reset_out (struct nn_worker *self, struct nn_worker_fd *fd)
 int nn_worker_add_timer (struct nn_worker *self,  int timeout,
     struct nn_worker_timer *timer)
 {
-    nn_timeout_add (&self->timeout, timeout, &timer->hndl);
+    nn_timerset_add (&self->timerset, timeout, &timer->hndl);
 }
 
 int nn_worker_rm_timer (struct nn_worker *self, struct nn_worker_timer *timer)
 {
-    nn_timeout_rm (&self->timeout, &timer->hndl);
+    nn_timerset_rm (&self->timerset, &timer->hndl);
 }
 
 static void nn_worker_routine (void *arg)
@@ -148,7 +148,7 @@ static void nn_worker_routine (void *arg)
     struct nn_worker *self;
     int pevent;
     struct nn_poller_hndl *phndl;
-    struct nn_timeout_hndl *thndl;
+    struct nn_timerset_hndl *thndl;
     struct nn_queue_item *item;
     struct nn_worker_task *task;
     struct nn_worker_fd *fd;
@@ -163,12 +163,12 @@ static void nn_worker_routine (void *arg)
         /*  Wait for any activity. */
         
         rc = nn_poller_wait (&self->poller,
-            nn_timeout_timeout (&self->timeout));
+            nn_timerset_timeout (&self->timerset));
         errnum_assert (rc == 0, -rc);
 
         /*  Process all expired timers. */
         while (1) {
-            rc = nn_timeout_event (&self->timeout, &thndl);
+            rc = nn_timerset_event (&self->timerset, &thndl);
             if (rc == -EAGAIN)
                 break;
             errnum_assert (rc == 0, -rc);
