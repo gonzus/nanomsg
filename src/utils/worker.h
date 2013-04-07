@@ -33,7 +33,7 @@
 
 struct nn_worker_fd {
     struct nn_async *owner;
-    struct nn_poller_hndl phndl;
+    struct nn_poller_hndl hndl;
 };
 
 void nn_worker_fd_init (struct nn_worker_fd *self, struct nn_async *owner);

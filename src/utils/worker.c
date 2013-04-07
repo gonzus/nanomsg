@@ -103,32 +103,32 @@ void nn_worker_post (struct nn_worker *self, struct nn_worker_task *task)
 
 void nn_worker_add (struct nn_worker *self, int s, struct nn_worker_fd *fd)
 {
-    nn_poller_add (&self->poller, s, &fd->phndl);
+    nn_poller_add (&self->poller, s, &fd->hndl);
 }
 
 void nn_worker_rm (struct nn_worker *self, struct nn_worker_fd *fd)
 {
-    nn_poller_rm (&self->poller, &fd->phndl);
+    nn_poller_rm (&self->poller, &fd->hndl);
 }
 
 void nn_worker_set_in (struct nn_worker *self, struct nn_worker_fd *fd)
 {
-    nn_poller_set_in (&self->poller, &fd->phndl);
+    nn_poller_set_in (&self->poller, &fd->hndl);
 }
 
 void nn_worker_reset_in (struct nn_worker *self, struct nn_worker_fd *fd)
 {
-    nn_poller_reset_in (&self->poller, &fd->phndl);
+    nn_poller_reset_in (&self->poller, &fd->hndl);
 }
 
 void nn_worker_set_out (struct nn_worker *self, struct nn_worker_fd *fd)
 {
-    nn_poller_set_out (&self->poller, &fd->phndl);
+    nn_poller_set_out (&self->poller, &fd->hndl);
 }
 
 void nn_worker_reset_out (struct nn_worker *self, struct nn_worker_fd *fd)
 {
-    nn_poller_reset_out (&self->poller, &fd->phndl);
+    nn_poller_reset_out (&self->poller, &fd->hndl);
 }
 
 int nn_worker_add_timer (struct nn_worker *self,  int timeout,
@@ -213,7 +213,7 @@ static void nn_worker_routine (void *arg)
             }
 
             /*  It's a true I/O event. Invoke the handler. */
-            fd = nn_cont (phndl, struct nn_worker_fd, phndl);
+            fd = nn_cont (phndl, struct nn_worker_fd, hndl);
             fd->owner->vfptr->event (fd->owner, fd, pevent);
         }
     }
