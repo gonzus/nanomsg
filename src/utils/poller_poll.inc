@@ -174,20 +174,23 @@ int nn_poller_event (struct nn_poller *self, int *event,
     if (nn_slow (self->index >= self->size))
         return -EAGAIN;
 
-    /*  Return next event to the caller. Remove the event from revents. */
+    /*  Return next event to the caller. Remove the event from revents.
+        Note that when error is encountered OUT is not reported. This
+        combination occurs ony when doing async connect, in which case
+        reporting just error is sufficient. */
     *hndl = self->hndls [self->index].hndl;
     if (nn_fast (self->pollset [self->index].revents & POLLIN)) {
         *event = NN_POLLER_IN;
         self->pollset [self->index].revents &= ~POLLIN;
         return 0;
     }
-    else if (nn_fast (self->pollset [self->index].revents & POLLOUT)) {
-        *event = NN_POLLER_OUT;
-        self->pollset [self->index].revents &= ~POLLOUT;
+    else if (nn_slow (!(self->pollset [self->index].revents & POLLOUT))) {
+        *event = NN_POLLER_ERR;
+        ++self->index;
         return 0;
     }
     else {
-        *event = NN_POLLER_ERR;
+        *event = NN_POLLER_OUT;
         ++self->index;
         return 0;
     }

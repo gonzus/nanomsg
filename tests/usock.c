@@ -32,6 +32,7 @@
 #include "../src/utils/timerset.c"
 #include "../src/utils/clock.c"
 #include "../src/utils/list.c"
+#include "../src/utils/alloc.c"
 #include "../src/utils/err.c"
 
 #include <sys/types.h>

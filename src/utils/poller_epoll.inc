@@ -203,20 +203,23 @@ int nn_poller_event (struct nn_poller *self, int *event,
     if (nn_slow (self->index >= self->nevents))
         return -EAGAIN;
 
-    /*  Return next event to the caller. Remove the event from the set. */
+    /*  Return next event to the caller. Remove the event from the set.
+        Note that when error is encountered OUT is not reported. This
+        combination occurs ony when doing async connect, in which case
+        reporting just error is sufficient. */
     *hndl = (struct nn_poller_hndl*) self->events [self->index].data.ptr;
     if (nn_fast (self->events [self->index].events & EPOLLIN)) {
         *event = NN_POLLER_IN;
         self->events [self->index].events &= ~EPOLLIN;
         return 0;
     }
-    else if (nn_fast (self->events [self->index].events & EPOLLOUT)) {
-        *event = NN_POLLER_OUT;
-        self->events [self->index].events &= ~EPOLLOUT;
+    else if (nn_slow (!(self->events [self->index].events & EPOLLOUT))) {
+        *event = NN_POLLER_ERR;
+        ++self->index;
         return 0;
     }
     else {
-        *event = NN_POLLER_ERR;
+        *event = NN_POLLER_OUT;
         ++self->index;
         return 0;
     }
