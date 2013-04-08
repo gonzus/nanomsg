@@ -48,8 +48,9 @@ int main ()
     struct nn_usock bs;
     struct nn_usock cs;
     struct nn_usock as;
-    struct nn_usock_event cev;
-    struct nn_usock_event aev;
+    struct nn_callback callback;
+
+    nn_callback_init (&callback, NULL);
 
     memset (&addr, 0, sizeof (addr));
     addr.sin_family = AF_INET;
@@ -57,19 +58,19 @@ int main ()
 
     nn_worker_init (&worker);
 
-    rc = nn_usock_init (&bs, AF_INET, SOCK_STREAM, 0, &worker);
+    rc = nn_usock_init (&bs, AF_INET, SOCK_STREAM, 0, &worker, &callback);
     errnum_assert (rc == 0, -rc);
     rc = nn_usock_bind (&bs, (struct sockaddr*) &addr, sizeof (addr));
     errnum_assert (rc == 0, -rc);
     rc = nn_usock_listen (&bs, 10);
     errnum_assert (rc == 0, -rc);
-    nn_usock_accept (&bs, &as, &aev);
+    nn_usock_accept (&bs, &as);
 
     nn_sleep (100);
 
-    rc = nn_usock_init (&cs, AF_INET, SOCK_STREAM, 0, &worker);
+    rc = nn_usock_init (&cs, AF_INET, SOCK_STREAM, 0, &worker, &callback);
     errnum_assert (rc == 0, -rc);
-    nn_usock_connect (&cs, (struct sockaddr*) &addr, sizeof (addr), &cev);
+    nn_usock_connect (&cs, (struct sockaddr*) &addr, sizeof (addr));
 
     nn_sleep (10000000);
 

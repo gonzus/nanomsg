@@ -32,72 +32,20 @@
 #define NN_USOCK_STATE_CONNECTED 3
 #define NN_USOCK_STATE_ACCEPTING 4
 
-#define NN_USOCK_EVENT_IN 1
-#define NN_USOCK_EVENT_OUT 2
-#define NN_USOCK_EVENT_ERR 3
-#define NN_USOCK_EVENT_CONNECTED 4
-#define NN_USOCK_EVENT_CONNECT 5
-#define NN_USOCK_EVENT_ACCEPT 6
-
-/*  Make sure that we can forward the poller events to the user without
-    converting them. */
-CT_ASSERT (NN_USOCK_EVENT_IN == NN_POLLER_IN);
-CT_ASSERT (NN_USOCK_EVENT_OUT == NN_POLLER_OUT);
-CT_ASSERT (NN_USOCK_EVENT_ERR == NN_POLLER_ERR);
-
-static void nn_usock_process (struct nn_usock *self, int event);
 static void nn_usock_callback_handler (struct nn_callback *self, void *source,
-    int type)
-{
-    struct nn_usock *usock;
-
-    usock = nn_cont (self, struct nn_usock, callback);
-
-    /*  This function coverts callback events into native usock events. */
-    if (source == &usock->wfd) {
-        nn_usock_process (usock, type);
-        return;
-    }
-    nn_assert (type == NN_WORKER_TASK_POSTED);
-    if (source == &usock->connected_task) {
-        nn_usock_process (usock, NN_USOCK_EVENT_CONNECTED);
-        return;
-    }
-    if (source == &usock->connect_task) {
-        nn_usock_process (usock, NN_USOCK_EVENT_CONNECT);
-        return;
-    }
-    if (source == &usock->accept_task) {
-        nn_usock_process (usock, NN_USOCK_EVENT_ACCEPT);
-        return;
-    }
-    nn_assert (0);
-}
+    int type);
 static const struct nn_callback_vfptr nn_usock_vfptr =
     {nn_usock_callback_handler};
 
-#if 0
-void nn_usock_event_init (struct nn_usock_event *self,
-    const struct nn_usock_event_vfptr *vfptr)
-{
-    self->vfptr = vfptr;
-    nn_worker_event_init (&self->worker_event, &nn_usock_worker_event_vfptr);
-    self->error = 0;
-}
-
-void nn_usock_event_term (struct nn_usock_event *self)
-{
-    nn_worker_event_term (&self->worker_event);
-}
-#endif
-
 static int nn_usock_init_from_fd (struct nn_usock *self,
-    int fd, struct nn_worker *worker)
+    int fd, struct nn_worker *worker, struct nn_callback *callback)
 {
     int rc;
     int opt;
 
-    nn_callback_init (&self->callback, &nn_usock_vfptr);
+    /*  Set up the callback pointers. */
+    nn_callback_init (&self->in_callback, &nn_usock_vfptr);
+    self->out_callback = callback;
 
     /*  Store the reference to the worker the socket is associated with. */
     self->worker = worker;
@@ -144,14 +92,13 @@ static int nn_usock_init_from_fd (struct nn_usock *self,
 #endif
     }
 
-    nn_worker_fd_init (&self->wfd, &self->callback);
-
     self->state = NN_USOCK_STATE_STARTING;
 
-    /*  Initialise the events to be sent to the worker thread. */
-    nn_worker_task_init (&self->connect_task, &self->callback);
-    nn_worker_task_init (&self->connected_task, &self->callback);
-    nn_worker_task_init (&self->accept_task, &self->callback);
+    /*  Initialise sources of callbacks. */
+    nn_worker_fd_init (&self->wfd, &self->in_callback);
+    nn_worker_task_init (&self->connect_task, &self->in_callback);
+    nn_worker_task_init (&self->connected_task, &self->in_callback);
+    nn_worker_task_init (&self->accept_task, &self->in_callback);
 
     /*  We are not accepting a connection at the moment. */
     self->newsock = NULL;
@@ -160,7 +107,9 @@ static int nn_usock_init_from_fd (struct nn_usock *self,
 }
 
 int nn_usock_init (struct nn_usock *self,
-    int domain, int type, int protocol, struct nn_worker *worker)
+    int domain, int type, int protocol,
+    struct nn_worker *worker,
+    struct nn_callback *callback)
 {
     int s;
 
@@ -175,10 +124,10 @@ int nn_usock_init (struct nn_usock *self,
     if (s < 0)
        return -errno;
 
-    return nn_usock_init_from_fd (self, s, worker);
+    return nn_usock_init_from_fd (self, s, worker, callback);
 }
 
-void nn_usock_close (struct nn_usock *self, struct nn_usock_event *event)
+void nn_usock_close (struct nn_usock *self)
 {
     nn_assert (0);
 }
@@ -229,8 +178,7 @@ int nn_usock_listen (struct nn_usock *self, int backlog)
     return 0;
 }
 
-void nn_usock_accept (struct nn_usock *self, struct nn_usock *newsock,
-    struct nn_usock_event *event)
+void nn_usock_accept (struct nn_usock *self, struct nn_usock *newsock)
 {
     int s;
 
@@ -246,16 +194,17 @@ void nn_usock_accept (struct nn_usock *self, struct nn_usock *newsock,
 
     /*  Immediate success. */
     if (nn_fast (s >= 0)) {
-        nn_usock_init_from_fd (newsock, s, self->worker);
-        event->vfptr->event (event);
+        nn_usock_init_from_fd (newsock, s, self->worker, NULL); /* ??? */
+        self->out_callback->vfptr->callback (self->out_callback, self,
+            NN_USOCK_ACCEPTED);
         return;
     }
 
     /*  Unexpected failure. */
     if (nn_slow (errno != EAGAIN && errno != EWOULDBLOCK &&
           errno != ECONNABORTED)) {
-        event->error = errno;
-        event->vfptr->event (event);
+        self->out_callback->vfptr->callback (self->out_callback, self,
+            NN_USOCK_ERROR);
         return;
     }
 
@@ -265,7 +214,7 @@ void nn_usock_accept (struct nn_usock *self, struct nn_usock *newsock,
 }
 
 void nn_usock_connect (struct nn_usock *self, const struct sockaddr *addr,
-    size_t addrlen, struct nn_usock_event *event)
+    size_t addrlen)
 {
     int rc;
 
@@ -279,15 +228,15 @@ void nn_usock_connect (struct nn_usock *self, const struct sockaddr *addr,
         nn_worker_post (self->worker, &self->connected_task);
 
         /*  Notify the user that the connection is established. */
-        event->vfptr->event (event);
-
+        self->out_callback->vfptr->callback (self->out_callback, self,
+            NN_USOCK_CONNECTED);
         return;
     }
 
     /* Return unexpected errors to the caller. Notify the user about it. */
     if (nn_slow (errno != EINPROGRESS)) {
-        event->error = errno;
-        event->vfptr->event (event);
+        self->out_callback->vfptr->callback (self->out_callback, self,
+            NN_USOCK_ERROR);
         return;
     }
 
@@ -296,72 +245,96 @@ void nn_usock_connect (struct nn_usock *self, const struct sockaddr *addr,
 }
 
 void nn_usock_send (struct nn_usock *self, const struct nn_iobuf *iov,
-    int iovcnt, struct nn_usock_event *event)
+    int iovcnt)
 {
     nn_assert (0);
 }
 
-void nn_usock_recv (struct nn_usock *self, void *buf, size_t len,
-    struct nn_usock_event *event)
+void nn_usock_recv (struct nn_usock *self, void *buf, size_t len)
 {
     nn_assert (0);
 }
 
-static void nn_usock_process (struct nn_usock *self, int event)
+static void nn_usock_callback_handler (struct nn_callback *self, void *source,
+    int type)
 {
-    switch (self->state) {
+    struct nn_usock *usock;
+
+    usock = nn_cont (self, struct nn_usock, in_callback);
+
+    switch (usock->state) {
+
+/******************************************************************************/
+/*  STARTING                                                                  */
+/******************************************************************************/
     case NN_USOCK_STATE_STARTING:
-        switch (event) {
-        case NN_USOCK_EVENT_CONNECTED:
-            nn_worker_add (self->worker, self->s, &self->wfd);
-            self->state = NN_USOCK_STATE_CONNECTED;
-            break;
-        case NN_USOCK_EVENT_CONNECT:
-            nn_worker_add (self->worker, self->s, &self->wfd);
-            nn_worker_set_out (self->worker, &self->wfd);
-            self->state = NN_USOCK_STATE_CONNECTING;
-            break;
-        case NN_USOCK_EVENT_ACCEPT:
-            nn_worker_add (self->worker, self->s, &self->wfd);
-            nn_worker_set_in (self->worker, &self->wfd);
-            self->state = NN_USOCK_STATE_ACCEPTING;
-            break;
-        default:
-            nn_assert (0);
+        if (source == &usock->connected_task) {
+            nn_assert (type == NN_WORKER_TASK_POSTED);
+            nn_worker_add (usock->worker, usock->s, &usock->wfd);
+            usock->state = NN_USOCK_STATE_CONNECTED;
+printf ("%p : connected\n", usock);
+            return;
         }
-        break;
+        if (source == &usock->connect_task) {
+            nn_assert (type == NN_WORKER_TASK_POSTED);
+            nn_worker_add (usock->worker, usock->s, &usock->wfd);
+            nn_worker_set_out (usock->worker, &usock->wfd);
+            usock->state = NN_USOCK_STATE_CONNECTING;
+printf ("%p : connecting\n", usock);
+            return;
+        }
+        if (source == &usock->accept_task) {
+            nn_assert (type == NN_WORKER_TASK_POSTED);
+            nn_worker_add (usock->worker, usock->s, &usock->wfd);
+            nn_worker_set_in (usock->worker, &usock->wfd);
+            usock->state = NN_USOCK_STATE_ACCEPTING;
+printf ("%p : accepting\n", usock);
+            return;
+        }
+        nn_assert (0);
+
+/******************************************************************************/
+/*  CONNECTING                                                                */
+/******************************************************************************/ 
     case NN_USOCK_STATE_CONNECTING:
-        switch (event) {
-        case NN_USOCK_EVENT_OUT:
-            nn_worker_reset_out (self->worker, &self->wfd);
-            self->state = NN_USOCK_STATE_CONNECTED;
-            break;
-        case NN_USOCK_EVENT_ERR:
-            nn_assert (0);
-        default:
-            nn_assert (0);
+        if (source == &usock->wfd) {
+            switch (type) {
+            case NN_WORKER_FD_OUT:
+                nn_worker_reset_out (usock->worker, &usock->wfd);
+                usock->state = NN_USOCK_STATE_CONNECTED;
+printf ("%p : connected\n", usock);
+                return;
+            case NN_WORKER_FD_ERR:
+                nn_assert (0);
+            default:
+                nn_assert (0);
+            }
         }
-        break;
-    case NN_USOCK_STATE_CONNECTED:
-        switch (event) {
-        case NN_USOCK_EVENT_IN:
-            nn_assert (0);
-        case NN_USOCK_EVENT_OUT:
-            nn_assert (0);
-        case NN_USOCK_EVENT_ERR:
-            nn_assert (0);
-        default:
-            nn_assert (0);
-        }
-        break;
+        nn_assert (0);
+
+/******************************************************************************/
+/*  ACCEPTING                                                                 */
+/******************************************************************************/ 
     case NN_USOCK_STATE_ACCEPTING:
-        switch (event) {
-        case NN_USOCK_EVENT_IN:
+        if (source == &usock->wfd) {
             nn_assert (0);
-        default:
-            nn_assert (0);
+            return;
         }
-        break;
+        nn_assert (0);
+
+/******************************************************************************/
+/*  CONNECTED                                                                 */
+/******************************************************************************/ 
+    case NN_USOCK_STATE_CONNECTED:
+        if (source == &usock->wfd) {
+            nn_assert (0);
+            return;
+        }
+        nn_assert (0);
+
+/******************************************************************************/
+/*  Invalid state                                                             */
+/******************************************************************************/ 
     default:
         nn_assert (0);
     }
