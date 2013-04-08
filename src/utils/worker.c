@@ -174,7 +174,7 @@ static void nn_worker_routine (void *arg)
                 break;
             errnum_assert (rc == 0, -rc);
             timer = nn_cont (thndl, struct nn_worker_timer, hndl);
-            timer->owner->vfptr->event (timer->owner, timer,
+            timer->owner->vfptr->callback (timer->owner, timer,
                 NN_WORKER_TIMER_TIMEOUT);
         }
 
@@ -207,7 +207,7 @@ static void nn_worker_routine (void *arg)
                     /*  It's a standard event. Notify it that it has arrived
                         in the worker thread. */
                     task = nn_cont (item, struct nn_worker_task, item);
-                    task->owner->vfptr->event (task->owner,
+                    task->owner->vfptr->callback (task->owner,
                         task, NN_WORKER_TASK_POSTED);
                 }
                 nn_mutex_unlock (&self->sync);
@@ -216,7 +216,7 @@ static void nn_worker_routine (void *arg)
 
             /*  It's a true I/O event. Invoke the handler. */
             fd = nn_cont (phndl, struct nn_worker_fd, hndl);
-            fd->owner->vfptr->event (fd->owner, fd, pevent);
+            fd->owner->vfptr->callback (fd->owner, fd, pevent);
         }
     }
 }
