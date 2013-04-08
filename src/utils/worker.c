@@ -174,7 +174,8 @@ static void nn_worker_routine (void *arg)
                 break;
             errnum_assert (rc == 0, -rc);
             timer = nn_cont (thndl, struct nn_worker_timer, hndl);
-            timer->owner->vfptr->event (timer->owner, timer, NN_ASYNC_OK);
+            timer->owner->vfptr->event (timer->owner, timer,
+                NN_WORKER_TIMER_TIMEOUT);
         }
 
         /*  Process all events from the poller. */
@@ -207,7 +208,7 @@ static void nn_worker_routine (void *arg)
                         in the worker thread. */
                     task = nn_cont (item, struct nn_worker_task, item);
                     task->owner->vfptr->event (task->owner,
-                        task, NN_ASYNC_OK);
+                        task, NN_WORKER_TASK_POSTED);
                 }
                 nn_mutex_unlock (&self->sync);
                 continue;

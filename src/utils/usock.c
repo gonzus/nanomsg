@@ -32,12 +32,18 @@
 #define NN_USOCK_STATE_CONNECTED 3
 #define NN_USOCK_STATE_ACCEPTING 4
 
-#define NN_USOCK_EVENT_IN NN_ASYNC_IN
-#define NN_USOCK_EVENT_OUT NN_ASYNC_OUT
-#define NN_USOCK_EVENT_ERR NN_ASYNC_ERR
-#define NN_USOCK_EVENT_CONNECTED 100
-#define NN_USOCK_EVENT_CONNECT 101
-#define NN_USOCK_EVENT_ACCEPT 102
+#define NN_USOCK_EVENT_IN 1
+#define NN_USOCK_EVENT_OUT 2
+#define NN_USOCK_EVENT_ERR 3
+#define NN_USOCK_EVENT_CONNECTED 4
+#define NN_USOCK_EVENT_CONNECT 5
+#define NN_USOCK_EVENT_ACCEPT 6
+
+/*  Make sure that we can forward the poller events to the user without
+    converting them. */
+CT_ASSERT (NN_USOCK_EVENT_IN == NN_POLLER_IN);
+CT_ASSERT (NN_USOCK_EVENT_OUT == NN_POLLER_OUT);
+CT_ASSERT (NN_USOCK_EVENT_ERR == NN_POLLER_ERR);
 
 static void nn_usock_process (struct nn_usock *self, int event);
 static void nn_usock_event_handler (struct nn_callback *self, void *source,
@@ -52,7 +58,7 @@ static void nn_usock_event_handler (struct nn_callback *self, void *source,
         nn_usock_process (usock, type);
         return;
     }
-    nn_assert (type == NN_ASYNC_OK);
+    nn_assert (type == NN_WORKER_TASK_POSTED);
     if (source == &usock->connected_task) {
         nn_usock_process (usock, NN_USOCK_EVENT_CONNECTED);
         return;

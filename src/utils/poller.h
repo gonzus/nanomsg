@@ -25,11 +25,9 @@
 
 #if !defined NN_HAVE_WINDOWS
 
-#include "callback.h"
-
-#define NN_POLLER_IN NN_ASYNC_IN
-#define NN_POLLER_OUT NN_ASYNC_OUT
-#define NN_POLLER_ERR NN_ASYNC_ERR
+#define NN_POLLER_IN 1
+#define NN_POLLER_OUT 2
+#define NN_POLLER_ERR 3
 
 struct nn_poller;
 struct nn_poller_hndl;

@@ -23,17 +23,20 @@
 #ifndef NN_ASYNC_INCLUDED
 #define NN_ASYNC_INCLUDED
 
-/*  Base class objects accepting callbacks. */
-
-/*  Types of callback events. */
-#define NN_ASYNC_OK 0
-#define NN_ASYNC_ERR 1
-#define NN_ASYNC_IN 2
-#define NN_ASYNC_OUT 3
+/*  Base class for objects accepting callbacks. */
 
 struct nn_callback;
 
 struct nn_callback_vfptr {
+
+    /*  Virtual function to be implemented by the derived class to handle the
+        callbacks. 'source' parameter is pointer to the object that generated
+        the callback event. As it can be any kind of object it is of type void*.
+        The user should check whether the pointer points to any source of events
+        it is aware of and cast the pointer accordingly. If a single object can
+        generate different kinds of callbacks, 'type' parameter specifies the
+        callback type. Possible values are defined by the event source
+        object. */
     void (*event) (struct nn_callback *self, void *source, int type);
 };
 

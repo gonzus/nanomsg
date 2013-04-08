@@ -31,6 +31,10 @@
 #include "timerset.h"
 #include "callback.h"
 
+#define NN_WORKER_FD_IN 1
+#define NN_WORKER_FD_OUT 2
+#define NN_WORKER_FD_ERR 3
+
 struct nn_worker_fd {
     struct nn_callback *owner;
     struct nn_poller_hndl hndl;
@@ -38,6 +42,8 @@ struct nn_worker_fd {
 
 void nn_worker_fd_init (struct nn_worker_fd *self, struct nn_callback *owner);
 void nn_worker_fd_term (struct nn_worker_fd *self);
+
+#define NN_WORKER_TASK_POSTED 1
 
 struct nn_worker_task {
     struct nn_callback *owner;
@@ -47,6 +53,8 @@ struct nn_worker_task {
 void nn_worker_task_init (struct nn_worker_task *self,
     struct nn_callback *owner);
 void nn_worker_task_term (struct nn_worker_task *self);
+
+#define NN_WORKER_TIMER_TIMEOUT 1
 
 struct nn_worker_timer {
     struct nn_callback *owner;
