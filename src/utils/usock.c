@@ -46,7 +46,7 @@ CT_ASSERT (NN_USOCK_EVENT_OUT == NN_POLLER_OUT);
 CT_ASSERT (NN_USOCK_EVENT_ERR == NN_POLLER_ERR);
 
 static void nn_usock_process (struct nn_usock *self, int event);
-static void nn_usock_event_handler (struct nn_callback *self, void *source,
+static void nn_usock_callback_handler (struct nn_callback *self, void *source,
     int type)
 {
     struct nn_usock *usock;
@@ -73,7 +73,8 @@ static void nn_usock_event_handler (struct nn_callback *self, void *source,
     }
     nn_assert (0);
 }
-static const struct nn_callback_vfptr nn_usock_vfptr = {nn_usock_event_handler};
+static const struct nn_callback_vfptr nn_usock_vfptr =
+    {nn_usock_callback_handler};
 
 #if 0
 void nn_usock_event_init (struct nn_usock_event *self,
