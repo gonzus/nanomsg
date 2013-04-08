@@ -25,7 +25,7 @@
 #include "fast.h"
 #include "cont.h"
 
-void nn_worker_fd_init (struct nn_worker_fd *self, struct nn_async *owner)
+void nn_worker_fd_init (struct nn_worker_fd *self, struct nn_callback *owner)
 {
     self->owner = owner;
 }
@@ -34,7 +34,8 @@ void nn_worker_fd_term (struct nn_worker_fd *self)
 {
 }
 
-void nn_worker_task_init (struct nn_worker_task *self, struct nn_async *owner)
+void nn_worker_task_init (struct nn_worker_task *self,
+    struct nn_callback *owner)
 {
     self->owner = owner;
     nn_queue_item_init (&self->item);
@@ -46,7 +47,7 @@ void nn_worker_task_term (struct nn_worker_task *self)
 }
 
 void nn_worker_timer_init (struct nn_worker_timer *self,
-    struct nn_async *owner)
+    struct nn_callback *owner)
 {
     self->owner = owner;
     nn_timerset_hndl_init (&self->hndl);

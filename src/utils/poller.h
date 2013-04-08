@@ -25,7 +25,7 @@
 
 #if !defined NN_HAVE_WINDOWS
 
-#include "async.h"
+#include "callback.h"
 
 #define NN_POLLER_IN NN_ASYNC_IN
 #define NN_POLLER_OUT NN_ASYNC_OUT

@@ -20,29 +20,15 @@
     IN THE SOFTWARE.
 */
 
-#ifndef NN_ASYNC_INCLUDED
-#define NN_ASYNC_INCLUDED
+#include "callback.h"
 
-/*  Base class for all async objects. */
+void nn_callback_init (struct nn_callback *self,
+    const struct nn_callback_vfptr *vfptr)
+{
+    self->vfptr = vfptr;
+}
 
-/*  Types of async events. */
-#define NN_ASYNC_OK 0
-#define NN_ASYNC_ERR 1
-#define NN_ASYNC_IN 2
-#define NN_ASYNC_OUT 3
-
-struct nn_async;
-
-struct nn_async_vfptr {
-    void (*event) (struct nn_async *self, void *source, int type);
-};
-
-struct nn_async {
-    const struct nn_async_vfptr *vfptr;
-};
-
-void nn_async_init (struct nn_async *self, const struct nn_async_vfptr *vfptr);
-void nn_async_term (struct nn_async *self);
-
-#endif
+void nn_callback_term (struct nn_callback *self)
+{
+}
 

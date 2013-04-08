@@ -26,8 +26,8 @@ set (CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 set (NN_SOURCES
 
-    utils/async.h
-    utils/async.c
+    utils/callback.h
+    utils/callback.c
     utils/fsm.h
     utils/fsm.c
     utils/worker.h

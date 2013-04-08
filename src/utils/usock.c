@@ -40,14 +40,14 @@
 #define NN_USOCK_EVENT_ACCEPT 102
 
 static void nn_usock_process (struct nn_usock *self, int event);
-static void nn_usock_event_handler (struct nn_async *self, void *source,
+static void nn_usock_event_handler (struct nn_callback *self, void *source,
     int type)
 {
     struct nn_usock *usock;
 
-    usock = nn_cont (self, struct nn_usock, async);
+    usock = nn_cont (self, struct nn_usock, callback);
 
-    /*  This function coverts async events into native usock events. */
+    /*  This function coverts callback events into native usock events. */
     if (source == &usock->wfd) {
         nn_usock_process (usock, type);
         return;
@@ -67,7 +67,7 @@ static void nn_usock_event_handler (struct nn_async *self, void *source,
     }
     nn_assert (0);
 }
-static const struct nn_async_vfptr nn_usock_vfptr = {nn_usock_event_handler};
+static const struct nn_callback_vfptr nn_usock_vfptr = {nn_usock_event_handler};
 
 #if 0
 void nn_usock_event_init (struct nn_usock_event *self,
@@ -90,7 +90,7 @@ static int nn_usock_init_from_fd (struct nn_usock *self,
     int rc;
     int opt;
 
-    nn_async_init (&self->async, &nn_usock_vfptr);
+    nn_callback_init (&self->callback, &nn_usock_vfptr);
 
     /*  Store the reference to the worker the socket is associated with. */
     self->worker = worker;
@@ -124,7 +124,7 @@ static int nn_usock_init_from_fd (struct nn_usock *self,
 #endif
 
     /* Switch the socket to the non-blocking mode. All underlying sockets
-        are always used in the asynchronous mode. */
+        are always used in the callbackhronous mode. */
     opt = fcntl (self->s, F_GETFL, 0);
     if (opt == -1)
         opt = 0;
@@ -137,14 +137,14 @@ static int nn_usock_init_from_fd (struct nn_usock *self,
 #endif
     }
 
-    nn_worker_fd_init (&self->wfd, &self->async);
+    nn_worker_fd_init (&self->wfd, &self->callback);
 
     self->state = NN_USOCK_STATE_STARTING;
 
     /*  Initialise the events to be sent to the worker thread. */
-    nn_worker_task_init (&self->connect_task, &self->async);
-    nn_worker_task_init (&self->connected_task, &self->async);
-    nn_worker_task_init (&self->accept_task, &self->async);
+    nn_worker_task_init (&self->connect_task, &self->callback);
+    nn_worker_task_init (&self->connected_task, &self->callback);
+    nn_worker_task_init (&self->accept_task, &self->callback);
 
     /*  We are not accepting a connection at the moment. */
     self->newsock = NULL;

@@ -29,31 +29,32 @@
 #include "efd.h"
 #include "poller.h"
 #include "timerset.h"
-#include "async.h"
+#include "callback.h"
 
 struct nn_worker_fd {
-    struct nn_async *owner;
+    struct nn_callback *owner;
     struct nn_poller_hndl hndl;
 };
 
-void nn_worker_fd_init (struct nn_worker_fd *self, struct nn_async *owner);
+void nn_worker_fd_init (struct nn_worker_fd *self, struct nn_callback *owner);
 void nn_worker_fd_term (struct nn_worker_fd *self);
 
 struct nn_worker_task {
-    struct nn_async *owner;
+    struct nn_callback *owner;
     struct nn_queue_item item;
 };
 
-void nn_worker_task_init (struct nn_worker_task *self, struct nn_async *owner);
+void nn_worker_task_init (struct nn_worker_task *self,
+    struct nn_callback *owner);
 void nn_worker_task_term (struct nn_worker_task *self);
 
 struct nn_worker_timer {
-    struct nn_async *owner;
+    struct nn_callback *owner;
     struct nn_timerset_hndl hndl;
 };
 
 void nn_worker_timer_init (struct nn_worker_timer *self,
-    struct nn_async *owner);
+    struct nn_callback *owner);
 void nn_worker_timer_term (struct nn_worker_timer *self);
 
 struct nn_worker {
