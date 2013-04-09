@@ -26,29 +26,20 @@ set (CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 set (NN_SOURCES
 
-    utils/callback.h
-    utils/callback.c
-    utils/fsm.h
-    utils/fsm.c
-    utils/worker.h
-    utils/worker.c
-    utils/usock.h
-    utils/usock.c
+    nn.h
+    transport.h
+    protocol.h
+    inproc.h
+    ipc.h
+    tcp.h
+    pair.h
+    pubsub.h
+    reqrep.h
+    fanin.h
+    fanout.h
+    survey.h
+    bus.h
 
-#    nn.h
-#    transport.h
-#    protocol.h
-#    inproc.h
-#    ipc.h
-#    tcp.h
-#    pair.h
-#    pubsub.h
-#    reqrep.h
-#    fanin.h
-#    fanout.h
-#    survey.h
-#    bus.h
-#
 #    core/ctx.h
 #    core/ctx.c
 #    core/ep.h
@@ -58,21 +49,23 @@ set (NN_SOURCES
 #    core/sock.c
 #    core/device.c
 #    core/symbol.c
-#
-#    utils/addr.h
-#    utils/addr.c
-#    utils/alloc.h
-#    utils/alloc.c
+
+    utils/addr.h
+    utils/addr.c
+    utils/alloc.h
+    utils/alloc.c
 #    utils/astream.h
 #    utils/astream.c
-#    utils/atomic.h
-#    utils/atomic.c
+    utils/atomic.h
+    utils/atomic.c
 #    utils/bstream.h
 #    utils/bstream.c
-#    utils/chunk.h
-#    utils/chunk.c
-#    utils/chunkref.h
-#    utils/chunkref.c
+    utils/callback.h
+    utils/callback.c
+    utils/chunk.h
+    utils/chunk.c
+    utils/chunkref.h
+    utils/chunkref.c
     utils/clock.h
     utils/clock.c
     utils/cont.h
@@ -82,17 +75,19 @@ set (NN_SOURCES
 #    utils/dist.c
     utils/efd.h
     utils/efd.c
-#    utils/err.h
-#    utils/err.c
+    utils/err.h
+    utils/err.c
 #    utils/excl.h
 #    utils/excl.c
-#    utils/fast.h
+    utils/fast.h
 #    utils/fq.h
 #    utils/fq.c
-#    utils/glock.h
-#    utils/glock.c
-#    utils/hash.h
-#    utils/hash.c
+    utils/fsm.h
+    utils/fsm.c
+    utils/glock.h
+    utils/glock.c
+    utils/hash.h
+    utils/hash.c
 #    utils/latmon.h
 #    utils/latmon.c
 #    utils/lb.h
@@ -112,21 +107,25 @@ set (NN_SOURCES
 #    utils/priolist.c
     utils/queue.h
     utils/queue.c
-#    utils/random.h
-#    utils/random.c
-#    utils/sem.h
-#    utils/sem.c
-#    utils/sleep.h
-#    utils/sleep.c
+    utils/random.h
+    utils/random.c
+    utils/sem.h
+    utils/sem.c
+    utils/sleep.h
+    utils/sleep.c
 #    utils/stream.h
 #    utils/stream.c
     utils/thread.h
     utils/thread.c
     utils/timerset.h
     utils/timerset.c
-#    utils/wire.h
-#    utils/wire.c
-#
+    utils/usock.h
+    utils/usock.c
+    utils/wire.h
+    utils/wire.c
+    utils/worker.h
+    utils/worker.c
+
 #    protocols/bus/bus.h
 #    protocols/bus/bus.c
 #    protocols/bus/xbus.h
