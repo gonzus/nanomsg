@@ -21,9 +21,11 @@
 */
 
 #include "usock.h"
+#include "alloc.h"
 #include "cont.h"
 #include "err.h"
 
+#include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
 
@@ -33,6 +35,8 @@
 #define NN_USOCK_STATE_ACCEPTING 4
 
 /*  Private functions. */
+static int nn_usock_send_raw (struct nn_usock *self, struct msghdr *hdr);
+static int nn_usock_recv_raw (struct nn_usock *self, void *buf, size_t *len);
 static int nn_usock_geterr (struct nn_usock *self);
 static void nn_usock_callback_handler (struct nn_callback *self, void *source,
     int type);
@@ -96,11 +100,21 @@ static int nn_usock_init_from_fd (struct nn_usock *self,
 
     self->state = NN_USOCK_STATE_STARTING;
 
+    self->in.buf = NULL;
+    self->in.len = 0;
+    self->in.batch = NULL;
+    self->in.batch_len = 0;
+    self->in.batch_pos = 0;
+
+    memset (&self->out.hdr, 0, sizeof (struct msghdr));
+
     /*  Initialise sources of callbacks. */
     nn_worker_fd_init (&self->wfd, &self->in_callback);
     nn_worker_task_init (&self->connect_task, &self->in_callback);
     nn_worker_task_init (&self->connected_task, &self->in_callback);
     nn_worker_task_init (&self->accept_task, &self->in_callback);
+    nn_worker_task_init (&self->send_task, &self->in_callback);
+    nn_worker_task_init (&self->recv_task, &self->in_callback);
 
     /*  We are not accepting a connection at the moment. */
     self->newsock = NULL;
@@ -252,38 +266,73 @@ void nn_usock_connect (struct nn_usock *self, const struct sockaddr *addr,
 void nn_usock_send (struct nn_usock *self, const struct nn_iovec *iov,
     int iovcnt)
 {
-    nn_assert (0);
+    int rc;
+    int i;
+    int out;
+
+    /*  Copy the iovecs to the socket. */
+    nn_assert (iovcnt <= NN_USOCK_MAX_IOVCNT);
+    self->out.hdr.msg_iov = self->out.iov;
+    out = 0;
+    for (i = 0; i != iovcnt; ++i) {
+        if (iov [i].iov_len == 0)
+            continue;
+        self->out.iov [out].iov_base = iov [i].iov_base;
+        self->out.iov [out].iov_len = iov [i].iov_len;
+        out++;
+    }
+    self->out.hdr.msg_iovlen = out; 
+    
+    /*  Try to send the data immediately. */
+    rc = nn_usock_send_raw (self, &self->out.hdr);
+
+    /*  Success. */
+    if (nn_fast (rc == 0)) {
+        self->out_callback->vfptr->callback (self->out_callback,
+            self, NN_USOCK_SENT);
+        return;
+    }
+
+    /*  Errors. */
+    if (nn_slow (rc != -EAGAIN)) {
+        errnum_assert (rc == -ECONNRESET, -rc);
+        self->out_callback->vfptr->callback (self->out_callback,
+            self, NN_USOCK_ERROR);
+        return;
+    }
+
+    /*  Ask the worker thread to send the remaining data. */
+    nn_worker_post (self->worker, &self->send_task);
 }
 
 void nn_usock_recv (struct nn_usock *self, void *buf, size_t len)
 {
-    nn_assert (0);
-}
-
-static int nn_usock_geterr (struct nn_usock *self)
-{
     int rc;
-    int opt;
-#if defined NN_HAVE_HPUX
-    int optsz;
-#else
-    socklen_t optsz;
-#endif
+    size_t nbytes;
 
-    opt = 0;
-    optsz = sizeof (opt);
-    rc = getsockopt (self->s, SOL_SOCKET, SO_ERROR, &opt, &optsz);
-
-    /*  The following should handle both Solaris and UNIXes derived from BSD. */
-    if (rc == -1) {
-        opt = errno;
-    }
-    else {
-        errno_assert (rc == 0);
-        nn_assert (optsz == sizeof (opt));
+    /*  Try to receive the data immediately. */
+    nbytes = len;
+    rc = nn_usock_recv_raw (self, buf, &nbytes);
+    if (nn_slow (rc < 0)) {
+        errnum_assert (rc == -ECONNRESET, -rc);
+        self->out_callback->vfptr->callback (self->out_callback,
+            self, NN_USOCK_ERROR);
+        return;
     }
 
-    return opt;
+    /*  Success. */
+    if (nn_fast (nbytes == len)) {
+        self->out_callback->vfptr->callback (self->out_callback,
+            self, NN_USOCK_RECEIVED);
+        return;
+    }
+
+    /*  There are still data to receive in the background. */
+    self->in.buf = ((uint8_t*) buf) + nbytes;
+    self->in.len = len - nbytes;
+
+    /*  Ask the worker thread to receive the remaining data. */
+    nn_worker_post (self->worker, &self->recv_task);
 }
 
 static void nn_usock_callback_handler (struct nn_callback *self, void *source,
@@ -292,6 +341,7 @@ static void nn_usock_callback_handler (struct nn_callback *self, void *source,
     int rc;
     struct nn_usock *usock;
     int s;
+    size_t sz;
 
     usock = nn_cont (self, struct nn_usock, in_callback);
 
@@ -381,12 +431,48 @@ static void nn_usock_callback_handler (struct nn_callback *self, void *source,
 /*  CONNECTED                                                                 */
 /******************************************************************************/ 
     case NN_USOCK_STATE_CONNECTED:
+        if (source == &usock->send_task) {
+            nn_assert (type == NN_WORKER_TASK_POSTED);
+            nn_worker_set_out (usock->worker, &usock->wfd);
+            return;
+        }
+        if (source == &usock->recv_task) {
+            nn_assert (type == NN_WORKER_TASK_POSTED);
+            nn_worker_set_in (usock->worker, &usock->wfd);
+            return;
+        }
         if (source == &usock->wfd) {
             switch (type) {
             case NN_WORKER_FD_IN:
-                nn_assert (0);
+                sz = usock->in.len;
+                rc = nn_usock_recv_raw (usock, usock->in.buf, &sz);
+                if (nn_fast (rc == 0)) {
+                    usock->in.len -= sz;
+                    if (!usock->in.len) {
+                        nn_worker_reset_in (usock->worker, &usock->wfd);
+                        usock->out_callback->vfptr->callback (
+                            usock->out_callback, usock, NN_USOCK_RECEIVED);
+                    }
+                    return;
+                }
+                errnum_assert (rc == -ECONNRESET, -rc);
+                usock->out_callback->vfptr->callback (usock->out_callback,
+                    usock, NN_USOCK_ERROR);
+                return;
             case NN_WORKER_FD_OUT:
-                nn_assert (0);
+                rc = nn_usock_send_raw (usock, &usock->out.hdr);
+                if (nn_fast (rc == 0)) {
+                    nn_worker_reset_out (usock->worker, &usock->wfd);
+                    usock->out_callback->vfptr->callback (usock->out_callback,
+                        usock, NN_USOCK_SENT);
+                    return;
+                }
+                if (nn_fast (rc == -EAGAIN))
+                    return;
+                errnum_assert (rc == -ECONNRESET, -rc);
+                usock->out_callback->vfptr->callback (usock->out_callback,
+                    usock, NN_USOCK_ERROR);
+                return;
             case NN_WORKER_FD_ERR:
                 nn_assert (0);
             default:
@@ -403,3 +489,149 @@ static void nn_usock_callback_handler (struct nn_callback *self, void *source,
     }
 }
 
+static int nn_usock_send_raw (struct nn_usock *self, struct msghdr *hdr)
+{
+    ssize_t nbytes;
+
+    /*  Try to send the data. */
+#if defined MSG_NOSIGNAL
+    nbytes = sendmsg (self->s, hdr, MSG_NOSIGNAL);
+#else
+    nbytes = sendmsg (self->s, hdr, 0);
+#endif
+
+    /*  Handle errors. */
+    if (nn_slow (nbytes < 0)) {
+        if (nn_fast (errno == EAGAIN || errno == EWOULDBLOCK))
+            nbytes = 0;
+        else {
+
+            /*  If the connection fails, return ECONNRESET. */
+            errno_assert (errno == ECONNRESET || errno == ETIMEDOUT ||
+                errno == EPIPE);
+            return -ECONNRESET;
+        }
+    }
+
+    /*  Some bytes were sent. Adjust the iovecs accordingly. */
+    while (nbytes) {
+        if (nbytes >= hdr->msg_iov->iov_len) {
+            --hdr->msg_iovlen;
+            if (!hdr->msg_iovlen) {
+                nn_assert (nbytes == hdr->msg_iov->iov_len);
+                return 0;
+            }
+            nbytes -= hdr->msg_iov->iov_len;
+            ++hdr->msg_iov;
+        }
+        else {
+            hdr->msg_iov->iov_base += nbytes;
+            hdr->msg_iov->iov_len -= nbytes;
+            return -EAGAIN;
+        }
+    }
+
+    if (hdr->msg_iovlen > 0)
+        return -EAGAIN;
+
+    return 0;
+}
+
+static int nn_usock_recv_raw (struct nn_usock *self, void *buf, size_t *len)
+{
+    size_t sz;
+    size_t length;
+    ssize_t nbytes;
+
+    /*  If batch buffer doesn't exist, allocate it. The point of delayed
+        deallocation to allow non-receiving sockets, such as TCP listening
+        sockets, to do without the batch buffer. */
+    if (nn_slow (!self->in.batch)) {
+        self->in.batch = nn_alloc (NN_USOCK_BATCH_SIZE, "AIO batch buffer");
+        alloc_assert (self->in.batch);
+    }
+
+    /*  Try to satisfy the recv request by data from the batch buffer. */
+    length = *len;
+    sz = self->in.batch_len - self->in.batch_pos;
+    if (sz) {
+        if (sz > length)
+            sz = length;
+        memcpy (buf, self->in.batch + self->in.batch_pos, sz);
+        self->in.batch_pos += sz;
+        buf = ((char*) buf) + sz;
+        length -= sz;
+        if (!length)
+            return 0;
+    }
+
+    /*  If recv request is greater than the batch buffer, get the data directly
+        into the place. Otherwise, read data to the batch buffer. */
+    if (length > NN_USOCK_BATCH_SIZE)
+        nbytes = recv (self->s, buf, length, 0);
+    else 
+        nbytes = recv (self->s, self->in.batch, NN_USOCK_BATCH_SIZE, 0);
+
+    /*  Handle any possible errors. */
+    if (nn_slow (nbytes <= 0)) {
+
+        if (nn_slow (nbytes == 0))
+            return -ECONNRESET; 
+
+        /*  Zero bytes received. */
+        if (nn_fast (errno == EAGAIN || errno == EWOULDBLOCK))
+            nbytes = 0;
+        else {
+
+            /*  If the peer closes the connection, return ECONNRESET. */
+            errno_assert (errno == ECONNRESET || errno == ENOTCONN ||
+                errno == ECONNREFUSED || errno == ETIMEDOUT ||
+                errno == EHOSTUNREACH);
+            return -ECONNRESET;
+        }
+    }
+
+    /*  If the data were received directly into the place we can return
+        straight away. */
+    if (length > NN_USOCK_BATCH_SIZE) {
+        length -= nbytes;
+        *len -= length;
+        return 0;
+    }
+
+    /*  New data were read to the batch buffer. Copy the requested amount of it
+        to the user-supplied buffer. */
+    self->in.batch_len = nbytes;
+    self->in.batch_pos = 0;
+    if (nbytes) {
+        sz = nbytes > length ? length : nbytes;
+        memcpy (buf, self->in.batch, sz);
+        length -= sz;
+        self->in.batch_pos += sz;
+    }
+
+    *len -= length;
+    return 0;
+}
+
+static int nn_usock_geterr (struct nn_usock *self)
+{
+    int rc;
+    int opt;
+#if defined NN_HAVE_HPUX
+    int optsz;
+#else
+    socklen_t optsz;
+#endif
+
+    opt = 0;
+    optsz = sizeof (opt);
+    rc = getsockopt (self->s, SOL_SOCKET, SO_ERROR, &opt, &optsz);
+
+    /*  The following should handle both Solaris and UNIXes derived from BSD. */
+    if (rc == -1)
+        return errno;
+    errno_assert (rc == 0);
+    nn_assert (optsz == sizeof (opt));
+    return opt;
+}

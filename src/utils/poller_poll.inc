@@ -143,16 +143,12 @@ int nn_poller_wait (struct nn_poller *self, int timeout)
     }
 
     /*  Wait for new events. */
-#if defined NN_IGNORE_EINTR
-again:
-#endif
-    rc = poll (self->pollset, self->size, timeout);
-    if (nn_slow (rc < 0 && errno == EINTR))
-#if defined NN_IGNORE_EINTR
-        goto again;
-#else
-        return -EINTR;
-#endif
+    while (1) {
+        rc = poll (self->pollset, self->size, timeout);
+        if (nn_slow (rc < 0 && errno == EINTR))
+            goto continue;
+        break;
+    }
     errno_assert (rc >= 0);
     return 0;
 }

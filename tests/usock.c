@@ -51,6 +51,16 @@ static void handler (struct nn_callback *self, void *source, int type)
     case NN_USOCK_ACCEPTED:
         printf ("accepted\n");
         break;
+    case NN_USOCK_SENT:
+        printf ("sent\n");
+        break;
+    case NN_USOCK_RECEIVED:
+        printf ("received\n");
+        break;
+    case NN_USOCK_ERROR:
+        printf ("error\n");
+        break;
+
     default:
         nn_assert (0);
     }
@@ -68,6 +78,7 @@ int main ()
     struct nn_usock as;
     struct nn_callback callback;
     struct nn_iovec iovec;
+    char buf [4];
 
     nn_callback_init (&callback, &vfptr);
 
@@ -97,6 +108,8 @@ int main ()
     iovec.iov_base = "ABCD";
     iovec.iov_len = 4;
     nn_usock_send (&cs, &iovec, 1);
+
+    nn_usock_recv (&as, buf, sizeof (buf));
 
     nn_sleep (10000000);
 

@@ -44,6 +44,13 @@
 #define NN_USOCK_RECEIVED 5
 #define NN_USOCK_ERROR 6
 
+/*  Maximum number of iovecs that can be passed to nn_usock_send function. */
+#define NN_USOCK_MAX_IOVCNT 3
+
+/*  Size of the buffer used for batch-reads of inbound data. To keep the
+    performance optimal make sure that this value is larger than network MTU. */
+#define NN_USOCK_BATCH_SIZE 2048
+
 struct nn_usock {
 
     /*  This class is sink of events. */
@@ -63,10 +70,41 @@ struct nn_usock {
         solely from the worker thread. */
     int state;
 
+    /*  Members related to receiving data. */
+    struct {
+
+        /*  The buffer being filled in at the moment. */
+        uint8_t *buf;
+        size_t len;
+
+        /*  Buffer for batch-reading inbound data. */
+        uint8_t *batch;
+
+        /*  Size of the batch buffer. */
+        size_t batch_len;
+
+        /*  Current position in the batch buffer. The data preceding this
+            position were already received by the user. The data that follow
+            will be received in the future. */
+        size_t batch_pos;
+    } in;
+
+    /*  Members related to sending data. */
+    struct {
+
+        /*  msghdr being sent at the moment. */
+        struct msghdr hdr;
+
+        /*  List of buffers being sent at the moment. Referenced from 'hdr'. */
+        struct iovec iov [NN_USOCK_MAX_IOVCNT];
+    } out;
+
     /*  Asynchronous tasks. */
     struct nn_worker_task connect_task;
     struct nn_worker_task connected_task;
     struct nn_worker_task accept_task;
+    struct nn_worker_task send_task;
+    struct nn_worker_task recv_task;
 
     /*  When accepting a new connection, the pointer to the object to associate
         the new connection with is stored here. */
