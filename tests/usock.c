@@ -39,6 +39,24 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <string.h>
+#include <stdio.h>
+
+static void handler (struct nn_callback *self, void *source, int type)
+{
+    printf ("%p ", source);
+    switch (type) {
+    case NN_USOCK_CONNECTED:
+        printf ("connected\n");
+        break;
+    case NN_USOCK_ACCEPTED:
+        printf ("accepted\n");
+        break;
+    default:
+        nn_assert (0);
+    }
+}
+
+static const struct nn_callback_vfptr vfptr = {handler};
 
 int main ()
 {
@@ -49,12 +67,14 @@ int main ()
     struct nn_usock cs;
     struct nn_usock as;
     struct nn_callback callback;
+    struct nn_iovec iovec;
 
-    nn_callback_init (&callback, NULL);
+    nn_callback_init (&callback, &vfptr);
 
     memset (&addr, 0, sizeof (addr));
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = htonl (0x7f000001);
+    addr.sin_port = htons (5555);
 
     nn_worker_init (&worker);
 
@@ -64,13 +84,19 @@ int main ()
     errnum_assert (rc == 0, -rc);
     rc = nn_usock_listen (&bs, 10);
     errnum_assert (rc == 0, -rc);
-    nn_usock_accept (&bs, &as);
+    nn_usock_accept (&bs, &as, &callback);
 
     nn_sleep (100);
 
     rc = nn_usock_init (&cs, AF_INET, SOCK_STREAM, 0, &worker, &callback);
     errnum_assert (rc == 0, -rc);
     nn_usock_connect (&cs, (struct sockaddr*) &addr, sizeof (addr));
+
+    nn_sleep (500);
+
+    iovec.iov_base = "ABCD";
+    iovec.iov_len = 4;
+    nn_usock_send (&cs, &iovec, 1);
 
     nn_sleep (10000000);
 

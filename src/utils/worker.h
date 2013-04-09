@@ -31,13 +31,17 @@
 #include "timerset.h"
 #include "callback.h"
 
-#define NN_WORKER_FD_IN 1
-#define NN_WORKER_FD_OUT 2
-#define NN_WORKER_FD_ERR 3
+/*  By using same values for poller events and worker_fd callback types we
+    don't have to convert between the two and we can pass the values as they
+    are. */
+#define NN_WORKER_FD_IN NN_POLLER_IN
+#define NN_WORKER_FD_OUT NN_POLLER_OUT
+#define NN_WORKER_FD_ERR NN_POLLER_ERR
 
 struct nn_worker_fd {
     struct nn_callback *owner;
     struct nn_poller_hndl hndl;
+    int error;
 };
 
 void nn_worker_fd_init (struct nn_worker_fd *self, struct nn_callback *owner);

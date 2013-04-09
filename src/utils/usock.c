@@ -32,6 +32,8 @@
 #define NN_USOCK_STATE_CONNECTED 3
 #define NN_USOCK_STATE_ACCEPTING 4
 
+/*  Private functions. */
+static int nn_usock_geterr (struct nn_usock *self);
 static void nn_usock_callback_handler (struct nn_callback *self, void *source,
     int type);
 static const struct nn_callback_vfptr nn_usock_vfptr =
@@ -102,6 +104,7 @@ static int nn_usock_init_from_fd (struct nn_usock *self,
 
     /*  We are not accepting a connection at the moment. */
     self->newsock = NULL;
+    self->newcallback = NULL;
 
     return 0;
 }
@@ -178,7 +181,8 @@ int nn_usock_listen (struct nn_usock *self, int backlog)
     return 0;
 }
 
-void nn_usock_accept (struct nn_usock *self, struct nn_usock *newsock)
+void nn_usock_accept (struct nn_usock *self, struct nn_usock *newsock,
+    struct nn_callback *newcallback)
 {
     int s;
 
@@ -194,7 +198,7 @@ void nn_usock_accept (struct nn_usock *self, struct nn_usock *newsock)
 
     /*  Immediate success. */
     if (nn_fast (s >= 0)) {
-        nn_usock_init_from_fd (newsock, s, self->worker, NULL); /* ??? */
+        nn_usock_init_from_fd (newsock, s, self->worker, newcallback);
         self->out_callback->vfptr->callback (self->out_callback, self,
             NN_USOCK_ACCEPTED);
         return;
@@ -210,6 +214,7 @@ void nn_usock_accept (struct nn_usock *self, struct nn_usock *newsock)
 
     /*  Ask the worker thread to wait for the new connection. */
     self->newsock = newsock;
+    self->newcallback = newcallback;
     nn_worker_post (self->worker, &self->accept_task);    
 }
 
@@ -244,7 +249,7 @@ void nn_usock_connect (struct nn_usock *self, const struct sockaddr *addr,
     nn_worker_post (self->worker, &self->connect_task);
 }
 
-void nn_usock_send (struct nn_usock *self, const struct nn_iobuf *iov,
+void nn_usock_send (struct nn_usock *self, const struct nn_iovec *iov,
     int iovcnt)
 {
     nn_assert (0);
@@ -255,10 +260,38 @@ void nn_usock_recv (struct nn_usock *self, void *buf, size_t len)
     nn_assert (0);
 }
 
+static int nn_usock_geterr (struct nn_usock *self)
+{
+    int rc;
+    int opt;
+#if defined NN_HAVE_HPUX
+    int optsz;
+#else
+    socklen_t optsz;
+#endif
+
+    opt = 0;
+    optsz = sizeof (opt);
+    rc = getsockopt (self->s, SOL_SOCKET, SO_ERROR, &opt, &optsz);
+
+    /*  The following should handle both Solaris and UNIXes derived from BSD. */
+    if (rc == -1) {
+        opt = errno;
+    }
+    else {
+        errno_assert (rc == 0);
+        nn_assert (optsz == sizeof (opt));
+    }
+
+    return opt;
+}
+
 static void nn_usock_callback_handler (struct nn_callback *self, void *source,
     int type)
 {
+    int rc;
     struct nn_usock *usock;
+    int s;
 
     usock = nn_cont (self, struct nn_usock, in_callback);
 
@@ -272,7 +305,6 @@ static void nn_usock_callback_handler (struct nn_callback *self, void *source,
             nn_assert (type == NN_WORKER_TASK_POSTED);
             nn_worker_add (usock->worker, usock->s, &usock->wfd);
             usock->state = NN_USOCK_STATE_CONNECTED;
-printf ("%p : connected\n", usock);
             return;
         }
         if (source == &usock->connect_task) {
@@ -280,7 +312,6 @@ printf ("%p : connected\n", usock);
             nn_worker_add (usock->worker, usock->s, &usock->wfd);
             nn_worker_set_out (usock->worker, &usock->wfd);
             usock->state = NN_USOCK_STATE_CONNECTING;
-printf ("%p : connecting\n", usock);
             return;
         }
         if (source == &usock->accept_task) {
@@ -288,7 +319,6 @@ printf ("%p : connecting\n", usock);
             nn_worker_add (usock->worker, usock->s, &usock->wfd);
             nn_worker_set_in (usock->worker, &usock->wfd);
             usock->state = NN_USOCK_STATE_ACCEPTING;
-printf ("%p : accepting\n", usock);
             return;
         }
         nn_assert (0);
@@ -302,7 +332,8 @@ printf ("%p : accepting\n", usock);
             case NN_WORKER_FD_OUT:
                 nn_worker_reset_out (usock->worker, &usock->wfd);
                 usock->state = NN_USOCK_STATE_CONNECTED;
-printf ("%p : connected\n", usock);
+                usock->out_callback->vfptr->callback (usock->out_callback,
+                    usock, NN_USOCK_CONNECTED);
                 return;
             case NN_WORKER_FD_ERR:
                 nn_assert (0);
@@ -317,8 +348,32 @@ printf ("%p : connected\n", usock);
 /******************************************************************************/ 
     case NN_USOCK_STATE_ACCEPTING:
         if (source == &usock->wfd) {
-            nn_assert (0);
-            return;
+            switch (type) {
+            case NN_WORKER_FD_IN:
+                nn_assert (usock->newsock);
+#if NN_HAVE_ACCEPT4
+                s = accept4 (usock->s, NULL, NULL, SOCK_CLOEXEC);
+#else
+                s = accept (usock->s, NULL, NULL);
+#endif
+                /*  ECONNABORTED is an valid error. If it happens do nothing
+                    and wait for next incoming connection to accept. */
+                if (s < 0) {
+                    if (errno == ECONNABORTED)
+                        return;
+                    errno_assert (0);
+                }
+
+                nn_usock_init_from_fd (usock->newsock, s, usock->worker,
+                    usock->newcallback);
+                usock->out_callback->vfptr->callback (usock->out_callback,
+                    usock, NN_USOCK_ACCEPTED);
+                usock->newsock = NULL;
+                usock->newcallback = NULL;
+                return;
+            default:
+                nn_assert (0);
+            }
         }
         nn_assert (0);
 
@@ -327,8 +382,16 @@ printf ("%p : connected\n", usock);
 /******************************************************************************/ 
     case NN_USOCK_STATE_CONNECTED:
         if (source == &usock->wfd) {
-            nn_assert (0);
-            return;
+            switch (type) {
+            case NN_WORKER_FD_IN:
+                nn_assert (0);
+            case NN_WORKER_FD_OUT:
+                nn_assert (0);
+            case NN_WORKER_FD_ERR:
+                nn_assert (0);
+            default:
+                nn_assert (0);
+            }
         }
         nn_assert (0);
 
