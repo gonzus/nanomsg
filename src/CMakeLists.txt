@@ -117,6 +117,8 @@ set (NN_SOURCES
 #    utils/stream.c
     utils/thread.h
     utils/thread.c
+    utils/timer.h
+    utils/timer.c
     utils/timerset.h
     utils/timerset.c
     utils/usock.h

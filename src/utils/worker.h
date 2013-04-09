@@ -93,9 +93,9 @@ void nn_worker_reset_in (struct nn_worker *self, struct nn_worker_fd *fd);
 void nn_worker_set_out (struct nn_worker *self, struct nn_worker_fd *fd);
 void nn_worker_reset_out (struct nn_worker *self, struct nn_worker_fd *fd);
 
-int nn_worker_add_timer (struct nn_worker *self,  int timeout,
+void nn_worker_add_timer (struct nn_worker *self,  int timeout,
     struct nn_worker_timer *timer);
-int nn_worker_rm_timer (struct nn_worker *self, struct nn_worker_timer *timer);
+void nn_worker_rm_timer (struct nn_worker *self, struct nn_worker_timer *timer);
 
 #endif
 

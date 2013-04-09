@@ -132,13 +132,13 @@ void nn_worker_reset_out (struct nn_worker *self, struct nn_worker_fd *fd)
     nn_poller_reset_out (&self->poller, &fd->hndl);
 }
 
-int nn_worker_add_timer (struct nn_worker *self,  int timeout,
+void nn_worker_add_timer (struct nn_worker *self,  int timeout,
     struct nn_worker_timer *timer)
 {
     nn_timerset_add (&self->timerset, timeout, &timer->hndl);
 }
 
-int nn_worker_rm_timer (struct nn_worker *self, struct nn_worker_timer *timer)
+void nn_worker_rm_timer (struct nn_worker *self, struct nn_worker_timer *timer)
 {
     nn_timerset_rm (&self->timerset, &timer->hndl);
 }

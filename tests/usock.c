@@ -23,6 +23,7 @@
 #include "../src/utils/worker.c"
 #include "../src/utils/callback.c"
 #include "../src/utils/usock.c"
+#include "../src/utils/timer.c"
 #include "../src/utils/sleep.c"
 #include "../src/utils/thread.c"
 #include "../src/utils/queue.c"
@@ -82,6 +83,7 @@ int main ()
     struct nn_callback callback;
     struct nn_iovec iovec;
     char buf [4];
+    struct nn_timer timer;
 
     nn_callback_init (&callback, &vfptr);
 
@@ -122,8 +124,14 @@ int main ()
 
     nn_sleep (500);
 
+    nn_timer_init (&timer, &worker, &callback);
+    nn_timer_start (&timer, 100);
+    nn_sleep (500);
+    nn_timer_close (&timer);
+
     nn_worker_term (&worker);
     nn_callback_term (&callback);
+
 
     return 0;
 }
