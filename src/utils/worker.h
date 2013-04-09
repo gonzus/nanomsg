@@ -41,7 +41,6 @@
 struct nn_worker_fd {
     struct nn_callback *owner;
     struct nn_poller_hndl hndl;
-    int error;
 };
 
 void nn_worker_fd_init (struct nn_worker_fd *self, struct nn_callback *owner);

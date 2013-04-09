@@ -105,6 +105,7 @@ struct nn_usock {
     struct nn_worker_task accept_task;
     struct nn_worker_task send_task;
     struct nn_worker_task recv_task;
+    struct nn_worker_task close_task;
 
     /*  When accepting a new connection, the pointer to the object to associate
         the new connection with is stored here. */

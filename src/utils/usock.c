@@ -35,6 +35,7 @@
 #define NN_USOCK_STATE_ACCEPTING 4
 
 /*  Private functions. */
+static void nn_usock_term (struct nn_usock *self);
 static int nn_usock_send_raw (struct nn_usock *self, struct msghdr *hdr);
 static int nn_usock_recv_raw (struct nn_usock *self, void *buf, size_t *len);
 static int nn_usock_geterr (struct nn_usock *self);
@@ -115,6 +116,7 @@ static int nn_usock_init_from_fd (struct nn_usock *self,
     nn_worker_task_init (&self->accept_task, &self->in_callback);
     nn_worker_task_init (&self->send_task, &self->in_callback);
     nn_worker_task_init (&self->recv_task, &self->in_callback);
+    nn_worker_task_init (&self->close_task, &self->in_callback);
 
     /*  We are not accepting a connection at the moment. */
     self->newsock = NULL;
@@ -146,7 +148,29 @@ int nn_usock_init (struct nn_usock *self,
 
 void nn_usock_close (struct nn_usock *self)
 {
-    nn_assert (0);
+    /*  Ask socket to close asynchronously. */
+    nn_worker_post (self->worker, &self->close_task);
+}
+
+static void nn_usock_term (struct nn_usock *self)
+{
+    int rc;
+
+    if (self->in.batch)
+        nn_free (self->in.batch);
+
+    nn_worker_task_term (&self->close_task);
+    nn_worker_task_term (&self->recv_task);
+    nn_worker_task_term (&self->send_task);
+    nn_worker_task_term (&self->accept_task);
+    nn_worker_task_term (&self->connected_task);
+    nn_worker_task_term (&self->connect_task);
+    nn_worker_fd_term (&self->wfd);
+
+    rc = close (self->s);
+    errno_assert (rc == 0);
+
+    nn_callback_term (&self->in_callback);
 }
 
 int nn_usock_setsockopt (struct nn_usock *self, int level, int optname,
@@ -342,8 +366,20 @@ static void nn_usock_callback_handler (struct nn_callback *self, void *source,
     struct nn_usock *usock;
     int s;
     size_t sz;
+    struct nn_callback *out_callback;
 
     usock = nn_cont (self, struct nn_usock, in_callback);
+
+    /*  Close event is processed in the same way not depending on the state
+        the usock is in. */
+    if (source == &usock->close_task) {
+        nn_worker_rm (usock->worker, &usock->wfd);
+        out_callback = usock->out_callback;
+        nn_usock_term (usock);
+        out_callback->vfptr->callback (usock->out_callback,
+            usock, NN_USOCK_CLOSED);
+        return;
+    }
 
     switch (usock->state) {
 
@@ -416,6 +452,8 @@ static void nn_usock_callback_handler (struct nn_callback *self, void *source,
 
                 nn_usock_init_from_fd (usock->newsock, s, usock->worker,
                     usock->newcallback);
+                nn_worker_add (usock->newsock->worker, usock->newsock->s,
+                    &usock->newsock->wfd);
                 usock->out_callback->vfptr->callback (usock->out_callback,
                     usock, NN_USOCK_ACCEPTED);
                 usock->newsock = NULL;

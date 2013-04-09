@@ -60,6 +60,9 @@ static void handler (struct nn_callback *self, void *source, int type)
     case NN_USOCK_ERROR:
         printf ("error\n");
         break;
+    case NN_USOCK_CLOSED:
+        printf ("closed\n");
+        break;
 
     default:
         nn_assert (0);
@@ -111,7 +114,16 @@ int main ()
 
     nn_usock_recv (&as, buf, sizeof (buf));
 
-    nn_sleep (10000000);
+    nn_sleep (500);
+
+    nn_usock_close (&cs);
+    nn_usock_close (&as);
+    nn_usock_close (&bs);
+
+    nn_sleep (500);
+
+    nn_worker_term (&worker);
+    nn_callback_term (&callback);
 
     return 0;
 }
